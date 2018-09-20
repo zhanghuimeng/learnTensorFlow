@@ -1,9 +1,10 @@
 import tensorflow as tf
 from tensorflow.data import Dataset
-from sklearn import metrics
+from sklearn import metrics  # for calculating MSE (compatiable with numpy)
 import pandas as pd
-from matplotlib import pyplot as plt
-# matplotlib is visualization for Numpy
+from matplotlib import pyplot as plt  # matplotlib is visualization for Numpy
+from matplotlib import cm  # for colors
+from IPython import display  # for displaying describe data
 import numpy as np
 import math
 
@@ -38,6 +39,111 @@ def my_input_fn(features, targets, batch_size=1, shuffle=True, num_epochs=None):
     return features, labels
 
 
+def train_model(learning_rate, steps, batch_size, input_feature="total_rooms", input_label="median_house_value"):
+    """
+    Trains a linear regression model of one feature
+    :param input_label: A string specifying a column from 'california_housing_dataframe'
+    :param learning_rate: A float, the learning rate
+    :param steps: A non-zero int, the total number of training steps.
+    :param batch_size: A non-zero int, the batch size
+    :param input_feature: A string specifying a column from 'california_housing_dataframe'
+    """
+
+    # Let's suppose that steps can be divided by 10
+    periods = 10
+    steps_per_period = steps / periods
+
+    # Start to use LinearRegressor Model
+
+    # 1. Define the feature
+    # Because it is a feature, it should have 1*n dimensions
+    my_feature = input_feature
+    my_feature_data = california_housing_dataframe[[my_feature]]
+    # A numerical feature column
+    feature_columns = [tf.feature_column.numeric_column(my_feature)]
+
+    # 2. Define the label
+    my_label = input_label
+    targets = california_housing_dataframe[my_label]
+
+    # 3. Configure LinearRegressor
+    # For SGD
+    my_optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
+    # For Gradient Clipping
+    my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, 5.0)
+    # Interesting that we only configured feature_columns and optimizer here
+    linear_regressor = tf.estimator.LinearRegressor(feature_columns=feature_columns, optimizer=my_optimizer)
+
+    # 4. Define input method
+    # Construct a data iterator for LinearRegressor
+    training_input_fn = lambda: my_input_fn(my_feature_data, targets, batch_size=batch_size)
+    predicting_input_fn = lambda: my_input_fn(my_feature_data, targets, num_epochs=1, shuffle=False)
+
+    # Plot the state of model's line in each period
+    plt.figure(figsize=(15, 6))
+    plt.subplot(1, 2, 1)
+    plt.title("Learned Line by Period")
+    plt.ylabel(my_label)
+    plt.xlabel(my_feature)
+    sample = california_housing_dataframe.sample(n=300)
+    plt.scatter(sample[my_feature], sample[my_label])
+    # seems like a color setting...?
+    # This method seems deprecated
+    # colors = [cm.coolwarm(x) for x in np.linspace(-1, 1, periods)]
+    cm = plt.get_cmap('coolwarm')
+
+    # 5. Train the model and periodically draw the lines
+    print("Training model...")
+    print("RMSE (on training data):")
+    root_mean_squared_errors = []
+    predictions = []
+    root_mean_squared_error = 0.0
+    for period in range(0, periods):
+        # Train
+        linear_regressor.train(input_fn=training_input_fn, steps=steps_per_period)
+        # Predict and evaluate
+        predictions = linear_regressor.predict(input_fn=predicting_input_fn)
+        predictions = np.array([item['predictions'][0] for item in predictions])
+        # Compute loss
+        root_mean_squared_error = math.sqrt(metrics.mean_squared_error(targets, predictions))
+        print("  period %02d : %0.2f" % (period, root_mean_squared_error))
+        root_mean_squared_errors.append(root_mean_squared_error)
+
+        # Ensure the data and line can be plotted
+        y_extents = np.array([0, sample[my_label].max()])
+
+        weight = linear_regressor.get_variable_value("linear/linear_model/%s/weights" % input_feature)[0]
+        bias = linear_regressor.get_variable_value("linear/linear_model/bias_weights")
+        # ??
+        x_extents = (y_extents - bias) / weight
+        x_extents = np.maximum(np.minimum(x_extents, sample[my_feature].max()), sample[my_feature].min())
+        y_extents = weight * x_extents + bias
+        # print(str(x_extents))
+        # print(str(y_extents))
+        lines = plt.plot(x_extents, y_extents, label=str(period))
+        lines[0].set_color(cm(period / periods))
+
+    # Draw RMSEs with periods
+    print("Model training finished.")
+    plt.subplot(1, 2, 2)
+    plt.ylabel("RMSE")
+    plt.xlabel("Periods")
+    plt.title("Root Mean Squared Error vs. Periods")
+    plt.tight_layout()
+    plt.plot(root_mean_squared_errors)
+
+    # Output calibration data
+    print("\nStatics for prediction and target:")
+    calibration_data = pd.DataFrame()
+    calibration_data["predictions"] = pd.Series(predictions)
+    calibration_data["targets"] = pd.Series(targets)
+    display.display(calibration_data.describe())
+
+    print("Final RMSE (on training data): %0.2f" % root_mean_squared_error)
+
+    plt.show()
+
+
 california_housing_dataframe = pd.read_csv('./california_housing_train.csv', sep=',')
 # print(str(california_housing_dataframe))
 # Then we get some 9 Series of data:
@@ -47,88 +153,5 @@ california_housing_dataframe = pd.read_csv('./california_housing_train.csv', sep
 # For the sake of learn rate (though I don't know why now)
 california_housing_dataframe['median_house_value'] /= 1000.0
 
-# The data size is 17000 rows * 9 columns
-# Try to draw a plot for (total_roomes, median_house_value) to get some understanding of the data
-sample = california_housing_dataframe.sample(300)
-plt.figure(1)
-plt.ylabel("median_house_value / 1000.0")
-plt.xlabel("total_rooms")
-plt.scatter(sample["total_rooms"], sample["median_house_value"])
-plt.show()
-
-# Also use Dataset.describe() to understand the data
-# print(california_housing_dataframe.describe())
-
-# Randomize the data so SGD can work well
-california_housing_dataframe = california_housing_dataframe.reindex(
-    np.random.permutation(california_housing_dataframe.index))
-
-# Start to use LinearRegressor Model
-
-# 1. Define the feature
-# Because it is a feature, it should have 1*n dimensions
-my_feature = california_housing_dataframe[["total_rooms"]]
-# A numerical feature column
-feature_columns = [tf.feature_column.numeric_column("total_rooms")]
-
-# 2. Define the label
-targets = california_housing_dataframe["median_house_value"]
-
-# 3. Configure LinearRegressor
-# For SGD
-my_optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.0000001)
-# For Gradient Clipping
-my_optimizer = tf.contrib.estimator.clip_gradients_by_norm(my_optimizer, 5.0)
-# Interesting that we only configured feature_columns and optimizer here
-linear_regressor = tf.estimator.LinearRegressor(feature_columns=feature_columns, optimizer=my_optimizer)
-
-# 4. Define input method
-# Construct a data iterator for LinearRegressor
-# def my_input_fn
-# print(str(dict(my_feature).items()))
-
-# 5. Train the model
-# First train for 100 steps
-# input_fn is a lambda (very interesting)
-# What's that _ here?
-_ = linear_regressor.train(input_fn=lambda:my_input_fn(my_feature, targets), steps=100)
-
-# 6. Evaluate the model
-# Only testing on train data currently.
-# Another lambda for input_fn, no repeat or shuffle this time
-prediction_input_fn = lambda: my_input_fn(my_feature, targets, num_epochs=1, shuffle=False)
-# Call predict() on the linear_regressor to make predictions
-predictions = linear_regressor.predict(input_fn=prediction_input_fn)
-# for item in predictions:
-#    print(str(item['predictions']))
-# The predictions looks like a list of dicts of lists
-# Format predictions as a NumPy array to calculate error metrics
-predictions = np.array([item['predictions'][0] for item in predictions])
-# Print Mean Squared Error and Root Mean Squared Error
-mean_squared_error = metrics.mean_squared_error(predictions, targets)
-root_mean_error = math.sqrt(mean_squared_error)
-print("Mean Squared Error (on training data): %0.3f" % mean_squared_error)
-print("Root Mean Squared Error (on training data): %0.3f" % root_mean_error)
-# Interpret the Mean Squared Error: using min & max
-min_house_value = california_housing_dataframe["median_house_value"].min()
-max_house_value = california_housing_dataframe["median_house_value"].max()
-min_max_difference = max_house_value - min_house_value
-print("Min of Median House Value: %0.3f" % min_house_value)
-print("Max of Median House Value: %0.3f" % max_house_value)
-print("Difference between Min and Max: %0.3f" % min_max_difference)
-
-# Draw the model on plt
-plt.figure(2)
-x_0 = sample["total_rooms"].min()
-x_1 = sample["total_rooms"].max()
-# Retrieve the final weight and bias of LinearRegressor model
-# Currently I don't know how to use the name correctly...?
-weight = linear_regressor.get_variable_value("linear/linear_model/total_rooms/weights")[0]
-bias = linear_regressor.get_variable_value("linear/linear_model/bias_weights")
-y_0 = weight * x_0 + bias
-y_1 = weight * x_1 + bias
-plt.plot([x_0, x_1], [y_0, y_1], c='r')
-plt.ylabel("median_house_value / 1000.0")
-plt.xlabel("total_rooms")
-plt.scatter(sample["total_rooms"], sample["median_house_value"])
-plt.show()
+# run the training model
+train_model(learning_rate=0.00001, steps=100, batch_size=1)
