@@ -154,4 +154,4 @@ california_housing_dataframe = pd.read_csv('./california_housing_train.csv', sep
 california_housing_dataframe['median_house_value'] /= 1000.0
 
 # run the training model
-train_model(learning_rate=0.00001, steps=100, batch_size=1)
+train_model(learning_rate=0.0001, steps=1000, batch_size=5)
