@@ -26,6 +26,34 @@ Difference between Min and Max: 485.002
 * steps = 100
 * batch size = 1
 
+```
+Training model...
+RMSE (on training data):
+  period 00 : 236.32
+  period 01 : 235.11
+  period 02 : 233.90
+  period 03 : 232.70
+  period 04 : 231.50
+  period 05 : 230.31
+  period 06 : 229.13
+  period 07 : 227.96
+  period 08 : 226.79
+  period 09 : 225.63
+Model training finished.
+
+Statics for prediction and target:
+        predictions       targets
+count  17000.000000  17000.000000
+mean      13.218177    207.300912
+std       10.899611    115.983764
+min        0.010005     14.999000
+25%        7.309922    119.400000
+50%       10.634884    180.400000
+75%       15.756076    265.000000
+max      189.682846    500.001000
+Final RMSE (on training data): 225.63
+```
+
 ![](tweak01.png)
 
 ## Tweak 02: Increasing learning rate

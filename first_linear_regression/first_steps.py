@@ -3,7 +3,6 @@ from tensorflow.data import Dataset
 from sklearn import metrics  # for calculating MSE (compatiable with numpy)
 import pandas as pd
 from matplotlib import pyplot as plt  # matplotlib is visualization for Numpy
-from matplotlib import cm  # for colors
 from IPython import display  # for displaying describe data
 import numpy as np
 import math
@@ -144,7 +143,7 @@ def train_model(learning_rate, steps, batch_size, input_feature="total_rooms", i
     plt.show()
 
 
-california_housing_dataframe = pd.read_csv('./california_housing_train.csv', sep=',')
+california_housing_dataframe = pd.read_csv('../data/california_housing_train.csv', sep=',')
 # print(str(california_housing_dataframe))
 # Then we get some 9 Series of data:
 # ["longitude","latitude","housing_median_age","total_rooms","total_bedrooms",
@@ -154,4 +153,4 @@ california_housing_dataframe = pd.read_csv('./california_housing_train.csv', sep
 california_housing_dataframe['median_house_value'] /= 1000.0
 
 # run the training model
-train_model(learning_rate=0.0001, steps=1000, batch_size=5)
+train_model(learning_rate=0.00001, steps=100, batch_size=1)
