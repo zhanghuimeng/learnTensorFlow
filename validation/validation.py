@@ -190,6 +190,18 @@ plt.scatter(training_samples["longitude"], training_samples["latitude"], cmap="c
 
 plt.show()
 
-linear_regressor = train_model(learning_rate=0.00001, steps=100, batch_size=1,
+linear_regressor = train_model(learning_rate=0.00001, steps=100, batch_size=1000,
                                training_samples=training_samples, training_targets=training_targets,
                                validation_samples=validation_samples, validation_targets=validation_targets)
+
+# Now read in the test data
+california_housing_test_data = pd.read_csv("../data/california_housing_test.csv")
+# Predict for the test data
+test_samples = preprocess_features(california_housing_test_data)
+test_targets = preprocess_targets(california_housing_test_data)
+predict_test_input_fn = lambda: my_input_fn(test_samples, test_targets, shuffle=False, num_epochs=1)
+# Then calculate the RMSE
+test_predictions = linear_regressor.predict(input_fn=predict_test_input_fn)
+test_predictions = np.array([item["predictions"][0] for item in test_predictions])
+test_root_mean_squared_error = math.sqrt(metrics.mean_squared_error(test_targets, test_predictions))
+print("RMSE on test data: %0.2f" % test_root_mean_squared_error)
