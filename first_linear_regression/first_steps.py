@@ -4,8 +4,12 @@ from sklearn import metrics  # for calculating MSE (compatiable with numpy)
 import pandas as pd
 from matplotlib import pyplot as plt  # matplotlib is visualization for Numpy
 from IPython import display  # for displaying describe data
-import numpy as np
+import numpy as np  # just numpy
 import math
+
+
+# Too much output...
+tf.logging.set_verbosity(tf.logging.ERROR)
 
 
 # The input function
