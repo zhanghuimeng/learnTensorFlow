@@ -3,19 +3,20 @@ import numpy as np
 tf.enable_eager_execution()
 
 
-# There seems to be some issue about the mnist data, cannot resolve it...
+# Lesson
+# 1. Don't blame eager execution and Keras.
+# 2. Carefully consider input type and shpe
+# 3. Understand what the funcions are saying    
 
 
 # Load MNIST data
 class Dataloader():
     def __init__(self):
         mnist = np.load("../data/mnist.npz")
-        # Must use asarray to convert uint8 to int32, or Dense complains
-        self.train_data = np.ndarray.astype(mnist["x_train"], dtype=np.int32)  # [60000, 28, 28]
-        # self.train_data = np.squeeze(np.asarray(self.train_data))
+        # Must use asarray to convert uint8 to float, or Dense complains
+        self.train_data = np.ndarray.astype(mnist["x_train"], dtype=np.float32)  # [60000, 28, 28]
         self.train_labels = np.asarray(mnist["y_train"], dtype=np.int32) # 60000 unit8
-        self.eval_data = np.ndarray.astype(mnist["x_test"], dtype=np.int32)  # [10000, 28, 28]
-        # self.eval_data = np.squeeze(np.asarray(self.eval_data))
+        self.eval_data = np.ndarray.astype(mnist["x_test"], dtype=np.float32)  # [10000, 28, 28]
         self.eval_labels = np.asarray(mnist["y_test"], dtype=np.int32)  # 10000 unit8
         print(np.shape(self.train_data))
 
@@ -26,7 +27,7 @@ class Dataloader():
 
 class MLP(tf.keras.Model):
     def __init__(self):
-        super().__init__()
+        super(MLP, self).__init__()
         self.dense1 = tf.keras.layers.Dense(units=100, activation=tf.nn.relu)
         self.dense2 = tf.keras.layers.Dense(units=10)
         # units: output dim
@@ -34,7 +35,9 @@ class MLP(tf.keras.Model):
         # output shape: (batch_size, ..., units)
 
     def call(self, inputs):
-        x = self.dense1(inputs)
+        x = tf.reshape(inputs, [-1, 28*28])
+        #print(x.shape)
+        x = self.dense1(x)
         x = self.dense2(x)
         return x
 
@@ -57,13 +60,15 @@ optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
 # Feed batches of data into the Model, calc loss, and update Model
 for batch_index in range(num_batches):
     X, y = dataloader.get_batch(batch_size)
-    print(np.shape(X))
-    print(np.shape(y))
+    # print(np.shape(X))
+    # print(np.shape(y))
     with tf.GradientTape() as tape:
         X = tf.convert_to_tensor(X)
         y_logit_pred = model(X)
+        # print(y_logit_pred.shape)
+        # print(y.shape)
         loss = tf.losses.sparse_softmax_cross_entropy(labels=y, logits=y_logit_pred)
-        print("batch %d: loss %f" % (batch_index, loss.numpy))
+        print("batch %d: loss %f" % (batch_index, loss.numpy()))
     grads = tape.gradient(loss, model.variables)
     optimizer.apply_gradients(grads_and_vars=zip(grads, model.variables))
 
