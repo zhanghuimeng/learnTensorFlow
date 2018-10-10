@@ -6,7 +6,7 @@ tf.enable_eager_execution()
 # Lesson
 # 1. Don't blame eager execution and Keras.
 # 2. Carefully consider input type and shpe
-# 3. Understand what the funcions are saying    
+# 3. Understand what the funcions are saying
 
 
 # Load MNIST data
