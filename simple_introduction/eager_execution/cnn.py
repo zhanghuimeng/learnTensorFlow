@@ -6,7 +6,7 @@ tf.enable_eager_execution()
 # Load MNIST data
 class Dataloader():
     def __init__(self):
-        mnist = np.load("../data/mnist.npz")
+        mnist = np.load("../../data/mnist.npz")
         # Must use asarray to convert uint8 to float, or Dense complains
         self.train_data = np.ndarray.astype(mnist["x_train"], dtype=np.float32)  # [60000, 28, 28]
         self.train_labels = np.asarray(mnist["y_train"], dtype=np.int32) # 60000 unit8
