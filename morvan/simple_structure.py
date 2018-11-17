@@ -10,7 +10,7 @@ y_calculated = x * weight + bias
 loss = tf.reduce_mean(tf.square(y_calculated - y_expected))  # reduce_mean和square结合使用==
 optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.5)
 train_op = optimizer.minimize(loss)
-initializer = tf.initialize_all_variables()
+initializer = tf.global_variables_initializer()
 
 with tf.Session() as sess:
     sess.run(initializer)
