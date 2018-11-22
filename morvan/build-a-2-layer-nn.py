@@ -21,9 +21,12 @@ def add_layer(scope, inputs, in_size, out_size, activation_function=None):
         return outputs
 
 
-x_data = np.random.uniform(-3, 3, [300, 1])
-noise = np.random.normal(0, 0.1, [300, 1])
-y_data = np.square(x_data) + 0.5 + noise
+# x_data = np.random.uniform(-3, 3, [300, 1])  # random points
+x_data = np.linspace(-1, 1, 300, dtype=np.float32)[:, np.newaxis]  # uniform points
+# noise = np.random.normal(0, 0.1, [300, 1])
+noise = np.random.normal(0, 0.05, (300, 1))
+# y_data = np.square(x_data) + 0.5 + noise
+y_data = np.square(x_data) - 0.5 + noise
 
 # Create graph
 # x和y的每个数据都只有1维，所以第二维是1
