@@ -42,7 +42,7 @@ output = add_layer('layer1', data_placeholder, 28*28, 10, None)  # Don't apply s
 loss = tf.losses.sparse_softmax_cross_entropy(label_placeholder, output)  # Why this API?
 train_op = tf.train.GradientDescentOptimizer(learning_rate=0.5).minimize(loss)
 # Testing
-prediction = tf.argmax(output, axis=-1, output_type=tf.int32)
+prediction = tf.argmax(tf.nn.softmax(output), axis=-1, output_type=tf.int32)
 correct_prediction = tf.equal(prediction, label_placeholder)
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 # 虽然我觉得有点奇怪，这样混用一张计算流图真的对吗？
