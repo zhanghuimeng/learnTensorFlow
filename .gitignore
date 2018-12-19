@@ -1,6 +1,7 @@
 venv/*
 **/logs/*
 logs/
+**/saved_graph/*
 
 # Compiled source #
 ###################
