@@ -8,15 +8,16 @@ with graph1.as_default():
     bias_init = tf.constant([7, 8, 9], dtype=tf.float32)
     bias = tf.get_variable('bias', initializer=bias_init)
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        sess.run(tf.global_variables_initializer())  # Run init first before calling saver
         saver = tf.train.Saver()
-        save_path = saver.save(sess, 'saved_graph/saved_net.ckpt')
+        save_path = saver.save(sess, 'saved_graph/saved_net.ckpt')  # .ckpt file type
 
 graph2 = tf.Graph()
 with graph2.as_default():
     weight_restored = tf.get_variable('weight', [3, 2], tf.float32)
     bias_restored = tf.get_variable('bias', [3], tf.float32)
     with tf.Session() as sess:
+        # No need to call init
         saver = tf.train.Saver()
         saver.restore(sess, save_path)
         print('weight', sess.run(weight_restored))
