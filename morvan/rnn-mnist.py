@@ -46,6 +46,7 @@ class RNNClassifier:
         # state[1] = [batch_size, state_size]
         with tf.variable_scope('LSTM'):
             outputs, state = self.add_lstm_layer(self.x, batch_size, state_size)
+            print(tf.shape(state))
             self.x = state[1]
         # Add output layer
         # x = [batch_size, state_size] ====> [batch_size, output_size]
