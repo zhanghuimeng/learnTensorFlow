@@ -262,7 +262,7 @@ class Seq2Seq:
         decoded_outputs = tf.fill([batch_size, 0], 0)
         # 当前时刻
         initial_i = tf.Variable(0)
-        print(decoded_outputs)
+        # print(decoded_outputs)
 
         # 因为不能用tensor进行条件判断，所以必须用while_loop operation...
         def body(i, inputs, state, decoded_outputs, finished):
