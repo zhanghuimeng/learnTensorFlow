@@ -58,11 +58,11 @@ class RNN(tf.keras.Model):
 
 # hyper-parameters
 batch_size = 128
-learning_rate = 0.001
+learning_rate = 0.01
 seq_length = 40
+num_batches = 7200
 
 dataLoader = Dataloader()
-num_batches = 60
 model = RNN(len(dataLoader.chars))
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
 for batch_index in range(num_batches):
@@ -83,3 +83,4 @@ for diversity in [0.2, 0.5, 1.0, 1.2]:
         y_pred = model.predict(X, diversity)
         print(dataLoader.indices_char[y_pred[0]], end='', flush=True)
         X = np.concatenate([X[:, 1:], np.expand_dims(y_pred, axis=1)], axis=-1)
+    print()
