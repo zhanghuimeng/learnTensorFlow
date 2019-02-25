@@ -1,8 +1,9 @@
+# encoding: utf-8
 import tensorflow as tf
 import argparse
 
 
-BATCH_SIZE=128
+BATCH_SIZE = 32
 STEPS = 2000
 EVAL_STEPS = 100
 EMB_SIZE = 1000
@@ -89,17 +90,20 @@ class Model:
             self.src_emb = tf.get_variable("src_embeddings", [src_vocab_size, emb_size])
 
             self.tgt_emb = tf.get_variable("tgt_embeddings", [tgt_vocab_size, emb_size])
-        with tf.variable_scope('training'):
+        with tf.variable_scope('src_rnn'):
             self.src_rnn_cell = {
                 'f': tf.nn.rnn_cell.GRUCell(hidden_size),
                 'w': tf.nn.rnn_cell.GRUCell(hidden_size)}
+        with tf.variable_scope('tgt_rnn'):
             self.tgt_rnn_cell = {
                 'f': tf.nn.rnn_cell.GRUCell(hidden_size),
                 'w': tf.nn.rnn_cell.GRUCell(hidden_size)}
+        with tf.variable_scope('attention'):
             self.weight_a = tf.get_variable('W_a', shape=[2 * self.hidden_size, 1], dtype=tf.float32,
                                             initializer=tf.initializers.random_normal(0.1))
             self.dense = tf.layers.Dense(units=1)
-            pred = self.predict(train_ele['src'], train_ele['tgt'], train_ele['src_len'], train_ele['tgt_len'])
+        with tf.variable_scope('training'):
+            self.train_pred = self.predict(train_ele['src'], train_ele['tgt'], train_ele['src_len'], train_ele['tgt_len'])
             # with tf.Session() as sess:
             #     sess.run(tf.tables_initializer())
             #     sess.run(self.train_iter.initializer)
@@ -107,16 +111,19 @@ class Model:
             #     print('pred:', sess.run(tf.shape(pred)))
             self.loss = tf.losses.mean_squared_error(
                 labels=tf.expand_dims(train_ele['hter'], 1),
-                predictions=pred)
+                predictions=self.train_pred)
             self.train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss)
         with tf.variable_scope('dev'):
-            pred = self.predict(dev_ele['src'], dev_ele['tgt'], dev_ele['src_len'], dev_ele['tgt_len'])
+            self.dev_label = tf.expand_dims(dev_ele['hter'], 1)  # 为了测试
+            self.dev_pred = self.predict(dev_ele['src'], dev_ele['tgt'], dev_ele['src_len'], dev_ele['tgt_len'])
             self.dev_mse = tf.metrics.mean_squared_error(
                 labels=tf.expand_dims(dev_ele['hter'], 1),
-                predictions=pred)
+                predictions=self.dev_pred,
+                name="dev_mse")
             self.dev_pearson = tf.contrib.metrics.streaming_pearson_correlation(
                 labels=tf.expand_dims(dev_ele['hter'], 1),
-                predictions=pred)
+                predictions=self.dev_pred,
+                name="dev_pearson")
         with tf.variable_scope('test'):
             pred = self.predict(test_ele['src'], test_ele['tgt'], test_ele['src_len'], test_ele['tgt_len'])
             self.test_mse = tf.metrics.mean_squared_error(
@@ -129,7 +136,7 @@ class Model:
     def predict(self, src, tgt, src_len, tgt_len):
         embedded_src = tf.nn.embedding_lookup(self.src_emb, src)
         embedded_tgt = tf.nn.embedding_lookup(self.tgt_emb, tgt)
-        with tf.variable_scope('src_rnn'):
+        with tf.variable_scope('src_birnn'):
             src_h = tf.nn.bidirectional_dynamic_rnn(
                 self.src_rnn_cell['f'],
                 self.src_rnn_cell['w'],
@@ -145,7 +152,7 @@ class Model:
             #     print(sess.run(tf.shape(src_h[0])))
             #     print(sess.run(tf.shape(src_h[1])))
             src_h = tf.concat(src_h, 2)
-        with tf.variable_scope('tgt_rnn'):
+        with tf.variable_scope('tgt_birnn'):
             # with tf.Session() as sess:
             #     sess.run(tf.tables_initializer())
             #     sess.run(train_iter.initializer)
@@ -184,10 +191,10 @@ class Model:
         #     sess.run(self.train_iter.initializer)
         #     sess.run(tf.global_variables_initializer())
         #     print('v:', sess.run(tf.shape(v)))
-
         v = self.dense(v)
         pred = tf.nn.sigmoid(v)
         return pred
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--train', type=str, nargs=3, help='Parallel training files and HTER score')
@@ -229,12 +236,18 @@ with tf.Session() as sess:
     sess.run(model.train_iter.initializer)
     sess.run(model.dev_iter.initializer)
     sess.run(model.test_iter.initializer)
+    writer = tf.summary.FileWriter('logs', sess.graph)
 
     for step in range(STEPS):
-        loss, _ = sess.run([model.loss, model.train_op])
+        loss, pred, _ = sess.run([model.loss, model.train_pred, model.train_op])
         print('Step %d: loss=%f' % (step, loss))
+        print('pred', pred)
         if step % EVAL_STEPS == 0:
-            mse, pearson = sess.run([model.dev_mse, model.dev_pearson])
+            pred, label, mse, pearson = sess.run([model.dev_pred, model.dev_label, model.dev_mse, model.dev_pearson])
+            print('pred', pred)
+            print('label', label)
+            print('mse', mse)
+            print('pearson', pearson)
             print('Eval %d: mse=%f, pearson=%f' % (step // EVAL_STEPS, mse, pearson))
 
     # 等下，test不应该shuffle的。。。
