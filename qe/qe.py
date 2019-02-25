@@ -3,10 +3,11 @@ import argparse
 
 
 BATCH_SIZE=128
-STEPS = 20000
+STEPS = 2000
+EVAL_STEPS = 100
 EMB_SIZE = 1000
 HIDDEN_SIZE = 500
-OUT_SIZE = 100
+LR = 1e-3
 
 
 def read_vocab(src, tgt):
@@ -15,6 +16,7 @@ def read_vocab(src, tgt):
     vocab_str_src = tf.contrib.lookup.index_to_string_table_from_file(src, default_value='<unk>')
     vocab_str_tgt = tf.contrib.lookup.index_to_string_table_from_file(tgt, default_value='<unk>')
     return vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt
+
 
 def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt):
     src = tf.data.TextLineDataset(src)
@@ -56,6 +58,7 @@ def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt):
             )
     return dataset
 
+
 def data_loader(vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt):
     train_dataset = one_dataset_loader(args.train[0], args.train[1], args.train[2], vocab_idx_src, vocab_idx_tgt)
     dev_dataset = one_dataset_loader(args.dev[0], args.dev[1], args.dev[2], vocab_idx_src, vocab_idx_tgt)
@@ -71,16 +74,17 @@ def data_loader(vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt):
 
 
 class Model:
-    def __init__(self, train_dataset, dev_dataset, hidden_size, src_vocab_size, tgt_vocab_size, emb_size, out_size):
+    def __init__(self, train_dataset, dev_dataset, hidden_size, src_vocab_size, tgt_vocab_size, emb_size,
+                 learning_rate):
         self.hidden_size = hidden_size
+        # 一次做完training dev test好像不太对，但现在先这样好了……
         with tf.variable_scope('inputs'):
             self.train_iter = train_dataset.make_initializable_iterator()
             train_ele = self.train_iter.get_next()
-            train_src = train_ele['src']
-            train_src_len = train_ele['src_len']
-            train_tgt = train_ele['tgt']
-            train_tgt_len = train_ele['tgt_len']
-            train_hter = train_ele['hter']
+            self.dev_iter = dev_dataset.make_initializable_iterator()
+            dev_ele = self.dev_iter.get_next()
+            self.test_iter = test_dataset.make_initializable_iterator()
+            test_ele = self.test_iter.get_next()
         with tf.variable_scope('embedding'):
             self.src_emb = tf.get_variable("src_embeddings", [src_vocab_size, emb_size])
 
@@ -95,12 +99,32 @@ class Model:
             self.weight_a = tf.get_variable('W_a', shape=[2 * self.hidden_size, 1], dtype=tf.float32,
                                             initializer=tf.initializers.random_normal(0.1))
             self.dense = tf.layers.Dense(units=1)
-            pred = self.predict(train_src, train_tgt, train_src_len, train_tgt_len)
-            with tf.Session() as sess:
-                sess.run(tf.tables_initializer())
-                sess.run(self.train_iter.initializer)
-                sess.run(tf.global_variables_initializer())
-                print('pred:', sess.run(tf.shape(pred)))
+            pred = self.predict(train_ele['src'], train_ele['tgt'], train_ele['src_len'], train_ele['tgt_len'])
+            # with tf.Session() as sess:
+            #     sess.run(tf.tables_initializer())
+            #     sess.run(self.train_iter.initializer)
+            #     sess.run(tf.global_variables_initializer())
+            #     print('pred:', sess.run(tf.shape(pred)))
+            self.loss = tf.losses.mean_squared_error(
+                labels=tf.expand_dims(train_ele['hter'], 1),
+                predictions=pred)
+            self.train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss)
+        with tf.variable_scope('dev'):
+            pred = self.predict(dev_ele['src'], dev_ele['tgt'], dev_ele['src_len'], dev_ele['tgt_len'])
+            self.dev_mse = tf.metrics.mean_squared_error(
+                labels=tf.expand_dims(dev_ele['hter'], 1),
+                predictions=pred)
+            self.dev_pearson = tf.contrib.metrics.streaming_pearson_correlation(
+                labels=tf.expand_dims(dev_ele['hter'], 1),
+                predictions=pred)
+        with tf.variable_scope('test'):
+            pred = self.predict(test_ele['src'], test_ele['tgt'], test_ele['src_len'], test_ele['tgt_len'])
+            self.test_mse = tf.metrics.mean_squared_error(
+                labels=tf.expand_dims(test_ele['hter'], 1),
+                predictions=pred)
+            self.test_pearson = tf.contrib.metrics.streaming_pearson_correlation(
+                labels=tf.expand_dims(test_ele['hter'], 1),
+                predictions=pred)
 
     def predict(self, src, tgt, src_len, tgt_len):
         embedded_src = tf.nn.embedding_lookup(self.src_emb, src)
@@ -155,11 +179,11 @@ class Model:
             v = tf.reduce_sum(tf.multiply(tf.expand_dims(a, 1), h), 0)
             return v
         v = tf.map_fn(unbatch_h, h)
-        with tf.Session() as sess:
-            sess.run(tf.tables_initializer())
-            sess.run(self.train_iter.initializer)
-            sess.run(tf.global_variables_initializer())
-            print('v:', sess.run(tf.shape(v)))
+        # with tf.Session() as sess:
+        #     sess.run(tf.tables_initializer())
+        #     sess.run(self.train_iter.initializer)
+        #     sess.run(tf.global_variables_initializer())
+        #     print('v:', sess.run(tf.shape(v)))
 
         v = self.dense(v)
         pred = tf.nn.sigmoid(v)
@@ -197,4 +221,20 @@ model = Model(train_dataset,
               emb_size=EMB_SIZE,
               src_vocab_size=src_vocab_size,
               tgt_vocab_size=tgt_vocab_size,
-              out_size=OUT_SIZE)
+              learning_rate=LR)
+with tf.Session() as sess:
+    sess.run(tf.global_variables_initializer())
+    sess.run(tf.local_variables_initializer())  # for pearson op
+    sess.run(tf.tables_initializer())
+    sess.run(model.train_iter.initializer)
+    sess.run(model.dev_iter.initializer)
+    sess.run(model.test_iter.initializer)
+
+    for step in range(STEPS):
+        loss, _ = sess.run([model.loss, model.train_op])
+        print('Step %d: loss=%f' % (step, loss))
+        if step % EVAL_STEPS == 0:
+            mse, pearson = sess.run([model.dev_mse, model.dev_pearson])
+            print('Eval %d: mse=%f, pearson=%f' % (step // EVAL_STEPS, mse, pearson))
+
+    # 等下，test不应该shuffle的。。。
