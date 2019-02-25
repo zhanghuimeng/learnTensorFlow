@@ -56,8 +56,7 @@ def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt):
             )
     return dataset
 
-def data_loader():
-    vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt = read_vocab(args.vocab[0], args.vocab[1])
+def data_loader(vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt):
     train_dataset = one_dataset_loader(args.train[0], args.train[1], args.train[2], vocab_idx_src, vocab_idx_tgt)
     dev_dataset = one_dataset_loader(args.dev[0], args.dev[1], args.dev[2], vocab_idx_src, vocab_idx_tgt)
     test_dataset = one_dataset_loader(args.test[0], args.test[1], args.test[2], vocab_idx_src, vocab_idx_tgt)
@@ -68,14 +67,15 @@ def data_loader():
     #     sess.run(iterator.initializer)
     #     for i in range(2):
     #         print(sess.run(next_element))
-    return vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt, train_dataset, dev_dataset, test_dataset
+    return train_dataset, dev_dataset, test_dataset
 
 
 class Model:
     def __init__(self, train_dataset, dev_dataset, hidden_size, src_vocab_size, tgt_vocab_size, emb_size, out_size):
+        self.hidden_size = hidden_size
         with tf.variable_scope('inputs'):
-            train_iter = train_dataset.make_initializable_iterator()
-            train_ele = train_iter.get_next()
+            self.train_iter = train_dataset.make_initializable_iterator()
+            train_ele = self.train_iter.get_next()
             train_src = train_ele['src']
             train_src_len = train_ele['src_len']
             train_tgt = train_ele['tgt']
@@ -83,39 +83,87 @@ class Model:
             train_hter = train_ele['hter']
         with tf.variable_scope('embedding'):
             self.src_emb = tf.get_variable("src_embeddings", [src_vocab_size, emb_size])
-            embedded_train_src = tf.nn.embedding_lookup(self.src_emb, train_src)
+
             self.tgt_emb = tf.get_variable("tgt_embeddings", [tgt_vocab_size, emb_size])
-            embedded_train_tgt = tf.nn.embedding_lookup(self.tgt_emb, train_tgt)
         with tf.variable_scope('training'):
             self.src_rnn_cell = {
                 'f': tf.nn.rnn_cell.GRUCell(hidden_size),
                 'w': tf.nn.rnn_cell.GRUCell(hidden_size)}
-            self.tgt_rnn_cell = {'f': tf.nn.rnn_cell.GRUCell(hidden_size), 'w': tf.nn.rnn_cell.GRUCell(hidden_size)}
+            self.tgt_rnn_cell = {
+                'f': tf.nn.rnn_cell.GRUCell(hidden_size),
+                'w': tf.nn.rnn_cell.GRUCell(hidden_size)}
+            self.weight_a = tf.get_variable('W_a', shape=[2 * self.hidden_size, 1], dtype=tf.float32,
+                                            initializer=tf.initializers.random_normal(0.1))
+            self.dense = tf.layers.Dense(units=1)
+            pred = self.predict(train_src, train_tgt, train_src_len, train_tgt_len)
             with tf.Session() as sess:
                 sess.run(tf.tables_initializer())
-                sess.run(train_iter.initializer)
-                print(sess.run(train_src))
+                sess.run(self.train_iter.initializer)
+                sess.run(tf.global_variables_initializer())
+                print('pred:', sess.run(tf.shape(pred)))
+
+    def predict(self, src, tgt, src_len, tgt_len):
+        embedded_src = tf.nn.embedding_lookup(self.src_emb, src)
+        embedded_tgt = tf.nn.embedding_lookup(self.tgt_emb, tgt)
+        with tf.variable_scope('src_rnn'):
             src_h = tf.nn.bidirectional_dynamic_rnn(
                 self.src_rnn_cell['f'],
                 self.src_rnn_cell['w'],
-                embedded_train_src,
-                dtype=tf.int64, # 如果不给定RNN initial state，则必须给定dtype
-                sequence_length=train_src_len)
+                embedded_src,
+                dtype=tf.float32,  # 如果不给定RNN initial state，则必须给定dtype（是状态的dtype！）
+                sequence_length=src_len)
+            src_h = src_h[0]  # 原来是(outputs, output_states)
+            # with tf.Session() as sess:
+            #     sess.run(tf.tables_initializer())
+            #     sess.run(train_iter.initializer)
+            #     sess.run(tf.global_variables_initializer())
+            #     print('src_h: ')
+            #     print(sess.run(tf.shape(src_h[0])))
+            #     print(sess.run(tf.shape(src_h[1])))
             src_h = tf.concat(src_h, 2)
+        with tf.variable_scope('tgt_rnn'):
+            # with tf.Session() as sess:
+            #     sess.run(tf.tables_initializer())
+            #     sess.run(train_iter.initializer)
+            #     print(sess.run(train_src))
             tgt_h = tf.nn.bidirectional_dynamic_rnn(
                 self.tgt_rnn_cell['f'],
                 self.tgt_rnn_cell['w'],
-                embedded_train_tgt,
-                dtype=tf.int64,
-                sequence_length=train_tgt_len)
+                embedded_tgt,
+                dtype=tf.float32,
+                sequence_length=tgt_len)
+            tgt_h = tgt_h[0]
             tgt_h = tf.concat(tgt_h, 2)
-            h = tf.concat([src_h, tgt_h])
-            with tf.Session() as sess:
-                sess.run(tf.tables_initializer())
-                sess.run(train_iter.initializer)
-                print(sess.run(h))
-            self.dense = tf.layers.Dense(units=out_size)
-            h = self.dense(h)
+        h = tf.concat([src_h, tgt_h], 1)
+        # 打印h的形状
+        # with tf.Session() as sess:
+        #     sess.run(tf.tables_initializer())
+        #     sess.run(train_iter.initializer)
+        #     sess.run(tf.global_variables_initializer())
+        #     print(sess.run(tf.shape(src_h)))
+        #     print(sess.run(tf.shape(tgt_h)))
+        #     print(sess.run(tf.shape(h)))
+        # 对h进行attention
+        # [66, 1000]
+        def unbatch_h(h):
+            # [1000]
+            def unpack_h(h):
+                # 然而这个broadcast比我想象得难用
+                return tf.reduce_sum(tf.multiply(h, self.weight_a))
+            a = tf.map_fn(unpack_h, h)
+            a = tf.nn.softmax(a)
+            v = tf.reduce_sum(tf.multiply(tf.expand_dims(a, 1), h), 0)
+            return v
+        v = tf.map_fn(unbatch_h, h)
+        with tf.Session() as sess:
+            sess.run(tf.tables_initializer())
+            sess.run(self.train_iter.initializer)
+            sess.run(tf.global_variables_initializer())
+            print('v:', sess.run(tf.shape(v)))
+
+        v = self.dense(v)
+        pred = tf.nn.sigmoid(v)
+        return pred
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--train', type=str, nargs=3, help='Parallel training files and HTER score')
@@ -124,12 +172,29 @@ parser.add_argument('--dev', type=str, nargs=3, help='Parallel development files
 parser.add_argument('--test', type=str, nargs=3, help='Parallel test files and HTER score')
 args = parser.parse_args()
 
-vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt, train_dataset, dev_dataset, test_dataset \
-    = data_loader()
+print("Loading vocabulary from %s and %s ..." % (args.vocab[0], args.vocab[1]))
+vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt = read_vocab(args.vocab[0], args.vocab[1])
+with tf.Session() as sess:
+    sess.run(tf.tables_initializer())
+    src_vocab_size = sess.run(vocab_idx_src.size())
+    tgt_vocab_size = sess.run(vocab_idx_tgt.size())
+# 没法用sess来算，只好直接行数+1了！
+# src_vocab_size = 1
+# with open(args.vocab[0], 'r') as f:
+#     for line in f:
+#         src_vocab_size += 1
+# tgt_vocab_size = 1
+# with open(args.vocab[1], 'r') as f:
+#     for line in f:
+#         tgt_vocab_size += 1
+print('Loaded src vocabulary size %d' % src_vocab_size)
+print('Loaded tgt vocabulary size %d' % tgt_vocab_size)
+train_dataset, dev_dataset, test_dataset \
+    = data_loader(vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt)
 model = Model(train_dataset,
               dev_dataset,
               hidden_size=HIDDEN_SIZE,
               emb_size=EMB_SIZE,
-              src_vocab_size=vocab_idx_src.size(),
-              tgt_vocab_size=vocab_idx_tgt.(),
+              src_vocab_size=src_vocab_size,
+              tgt_vocab_size=tgt_vocab_size,
               out_size=OUT_SIZE)
