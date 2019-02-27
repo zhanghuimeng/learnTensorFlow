@@ -10,9 +10,9 @@ do
             if [[ "0" -le "$OPTARG" && "$OPTARG" -lt "8" ]]
             then
                 export CUDA_VISIBLE_DEVICES=$OPTARG
-                python_cmd="venv-gpu/bin/python"
+                python_cmd="venv-gpu/bin/python -u"
             else
-                python_cmd="venv/bin/python"
+                python_cmd="venv/bin/python -u"
             fi
             ;;
         b)

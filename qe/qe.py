@@ -3,7 +3,7 @@ import tensorflow as tf
 import argparse
 
 
-BATCH_SIZE = 128
+BATCH_SIZE = 32
 STEPS = 2000
 EVAL_STEPS = 50
 EMB_SIZE = 1000
@@ -65,6 +65,8 @@ def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, one_shot=Fa
     }
     if not one_shot:
         dataset = dataset.shuffle(buffer_size=10000)
+    else:
+        dataset = dataset.repeat()
     dataset = dataset.padded_batch(BATCH_SIZE, padded_shapes=padded_shapes, padding_values=padding_values)
     return dataset
 
@@ -161,10 +163,10 @@ class Model:
                 test_ele['src'], test_ele['tgt'], test_ele['src_len'], test_ele['tgt_len'])
             self.test_mse, _ = tf.metrics.mean_squared_error(
                 labels=tf.expand_dims(test_ele['hter'], 1),
-                predictions=pred)
+                predictions=self.test_pred)
             self.test_pearson, _ = tf.contrib.metrics.streaming_pearson_correlation(
                 labels=tf.expand_dims(test_ele['hter'], 1),
-                predictions=pred)
+                predictions=self.test_pred)
 
     def predict(self, src, tgt, src_len, tgt_len):
         embedded_src = tf.nn.embedding_lookup(self.src_emb, src)
@@ -236,25 +238,28 @@ parser.add_argument('--dev', type=str, nargs=3, help='Parallel development files
 parser.add_argument('--test', type=str, nargs=3, help='Parallel test files and HTER score')
 args = parser.parse_args()
 
-print("Loading vocabulary from %s and %s ..." % (args.vocab[0], args.vocab[1]))
-vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt = read_vocab(args.vocab[0], args.vocab[1])
-with tf.Session() as sess:
-    sess.run(tf.tables_initializer())
-    src_vocab_size = sess.run(vocab_idx_src.size())
-    tgt_vocab_size = sess.run(vocab_idx_tgt.size())
-# 没法用sess来算，只好直接行数+1了！
-# src_vocab_size = 1
-# with open(args.vocab[0], 'r') as f:
-#     for line in f:
-#         src_vocab_size += 1
-# tgt_vocab_size = 1
-# with open(args.vocab[1], 'r') as f:
-#     for line in f:
-#         tgt_vocab_size += 1
-print('Loaded src vocabulary size %d' % src_vocab_size)
-print('Loaded tgt vocabulary size %d' % tgt_vocab_size)
-train_dataset, dev_dataset, test_dataset \
-    = data_loader(vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt)
+# 据说把数据预处理放在CPU上是best practice
+with tf.device('/cpu:0'):
+    print("Loading vocabulary from %s and %s ..." % (args.vocab[0], args.vocab[1]))
+    vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt = read_vocab(args.vocab[0], args.vocab[1])
+    with tf.Session() as sess:
+        sess.run(tf.tables_initializer())
+        src_vocab_size = sess.run(vocab_idx_src.size())
+        tgt_vocab_size = sess.run(vocab_idx_tgt.size())
+    # 没法用sess来算，只好直接行数+1了！
+    # src_vocab_size = 1
+    # with open(args.vocab[0], 'r') as f:
+    #     for line in f:
+    #         src_vocab_size += 1
+    # tgt_vocab_size = 1
+    # with open(args.vocab[1], 'r') as f:
+    #     for line in f:
+    #         tgt_vocab_size += 1
+    print('Loaded src vocabulary size %d' % src_vocab_size)
+    print('Loaded tgt vocabulary size %d' % tgt_vocab_size)
+    train_dataset, dev_dataset, test_dataset \
+        = data_loader(vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt)
+print('Building computation model...')
 model = Model(train_dataset,
               dev_dataset,
               hidden_size=HIDDEN_SIZE,
@@ -267,12 +272,19 @@ with tf.Session() as sess:
     sess.run(tf.local_variables_initializer())  # for pearson op
     sess.run(tf.tables_initializer())
     sess.run(model.train_iter.initializer)
+    # 打印到tensorboard
     writer = tf.summary.FileWriter('logs', sess.graph)
+    train_summary = tf.Summary()
+    train_summary.value.add(tag='train loss', simple_value=None)
+    dev_summary = tf.Summary()
+    dev_summary.value.add(tag='dev mse', simple_value=None)
+    dev_summary.value.add(tag='dev pearson', simple_value=None)
 
     for step in range(STEPS):
-        loss, pred, _ = sess.run([model.loss, model.train_pred, model.train_op])
+        loss, _ = sess.run([model.loss, model.train_op])
         print('Step %d: loss=%f' % (step, loss))
-        # print('pred', pred)
+        train_summary.value[0].simple_value = loss
+        writer.add_summary(train_summary, step)
         if step % EVAL_STEPS == 0:
             try:
                 sess.run(model.dev_iter.initializer)
@@ -283,13 +295,16 @@ with tf.Session() as sess:
             except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
                 pass
             print('Eval %d: mse=%f, pearson=%f' % (step // EVAL_STEPS, mse, pearson))
+            dev_summary.value[0].simple_value = mse
+            dev_summary.value[1].simple_value = pearson
+            writer.add_summary(dev_summary, step)
+        writer.flush()
 
     # 等下，test不应该shuffle的。。。
+    sess.run(model.test_iter.initializer)
     try:
-        sess.run(model.test_iter.initializer)
-        try:
-            while True:
-                mse, pearson = sess.run([model.test_mse, model.test_pearson])
-        except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
-            pass
-        print('Test: mse=%f, pearson=%f' % mse, pearson)
+        while True:
+            mse, pearson = sess.run([model.test_mse, model.test_pearson])
+    except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
+        pass
+    print('Test: mse=%f, pearson=%f' % mse, pearson)
