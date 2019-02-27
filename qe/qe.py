@@ -3,12 +3,22 @@ import tensorflow as tf
 import argparse
 
 
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 STEPS = 2000
-EVAL_STEPS = 100
+EVAL_STEPS = 50
 EMB_SIZE = 1000
 HIDDEN_SIZE = 500
 LR = 1e-3
+
+
+# https://github.com/tensorflow/tensorflow/issues/4814
+def create_reset_metric(metric, scope='reset_metrics', **metric_args):
+  with tf.variable_scope(scope) as scope:
+    metric_op, update_op = metric(**metric_args)
+    vars = tf.contrib.framework.get_variables(
+                 scope, collection=tf.GraphKeys.LOCAL_VARIABLES)
+    reset_op = tf.variables_initializer(vars)
+  return metric_op, update_op, reset_op
 
 
 def read_vocab(src, tgt):
@@ -19,7 +29,7 @@ def read_vocab(src, tgt):
     return vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt
 
 
-def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt):
+def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, one_shot=False):
     src = tf.data.TextLineDataset(src)
     tgt = tf.data.TextLineDataset(tgt)
     hter = tf.data.TextLineDataset(hter)
@@ -53,17 +63,33 @@ def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt):
         'tgt_len': tf.constant(0),
         'hter': tf.constant(0.0)
     }
-    dataset = (dataset
-               .shuffle(buffer_size=10000)
-               .padded_batch(BATCH_SIZE, padded_shapes=padded_shapes, padding_values=padding_values)
-            )
+    if not one_shot:
+        dataset = dataset.shuffle(buffer_size=10000)
+    dataset = dataset.padded_batch(BATCH_SIZE, padded_shapes=padded_shapes, padding_values=padding_values)
     return dataset
 
 
 def data_loader(vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt):
-    train_dataset = one_dataset_loader(args.train[0], args.train[1], args.train[2], vocab_idx_src, vocab_idx_tgt)
-    dev_dataset = one_dataset_loader(args.dev[0], args.dev[1], args.dev[2], vocab_idx_src, vocab_idx_tgt)
-    test_dataset = one_dataset_loader(args.test[0], args.test[1], args.test[2], vocab_idx_src, vocab_idx_tgt)
+    train_dataset = one_dataset_loader(
+        src=args.train[0],
+        tgt=args.train[1],
+        hter=args.train[2],
+        vocab_idx_src=vocab_idx_src,
+        vocab_idx_tgt=vocab_idx_tgt)
+    dev_dataset = one_dataset_loader(
+        src=args.dev[0],
+        tgt=args.dev[1],
+        hter=args.dev[2],
+        vocab_idx_src=vocab_idx_src,
+        vocab_idx_tgt=vocab_idx_tgt,
+        one_shot=True)
+    test_dataset = one_dataset_loader(
+        src=args.test[0],
+        tgt=args.test[1],
+        hter=args.test[2],
+        vocab_idx_src=vocab_idx_src,
+        vocab_idx_tgt=vocab_idx_tgt,
+        one_shot=True)
     # iterator = training_dataset.make_initializable_iterator()
     # next_element = iterator.get_next()
     # with tf.Session() as sess:
@@ -87,9 +113,8 @@ class Model:
             self.test_iter = test_dataset.make_initializable_iterator()
             test_ele = self.test_iter.get_next()
         with tf.variable_scope('embedding'):
-            self.src_emb = tf.get_variable("src_embeddings", [src_vocab_size, emb_size])
-
-            self.tgt_emb = tf.get_variable("tgt_embeddings", [tgt_vocab_size, emb_size])
+            self.src_emb = tf.get_variable("src_embeddings", [src_vocab_size, emb_size], dtype=tf.float32)
+            self.tgt_emb = tf.get_variable("tgt_embeddings", [tgt_vocab_size, emb_size], dtype=tf.float32)
         with tf.variable_scope('src_rnn'):
             self.src_rnn_cell = {
                 'f': tf.nn.rnn_cell.GRUCell(hidden_size),
@@ -103,7 +128,11 @@ class Model:
                                             initializer=tf.initializers.random_normal(0.1))
             self.dense = tf.layers.Dense(units=1)
         with tf.variable_scope('training'):
-            self.train_pred = self.predict(train_ele['src'], train_ele['tgt'], train_ele['src_len'], train_ele['tgt_len'])
+            self.train_pred = self.predict(
+                src=train_ele['src'],
+                tgt=train_ele['tgt'],
+                src_len=train_ele['src_len'],
+                tgt_len=train_ele['tgt_len'])
             # with tf.Session() as sess:
             #     sess.run(tf.tables_initializer())
             #     sess.run(self.train_iter.initializer)
@@ -114,22 +143,26 @@ class Model:
                 predictions=self.train_pred)
             self.train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss)
         with tf.variable_scope('dev'):
-            self.dev_label = tf.expand_dims(dev_ele['hter'], 1)  # 为了测试
             self.dev_pred = self.predict(dev_ele['src'], dev_ele['tgt'], dev_ele['src_len'], dev_ele['tgt_len'])
-            self.dev_mse = tf.metrics.mean_squared_error(
+            self.dev_mse, self.dev_mse_update, self.dev_mse_reset = create_reset_metric(
+                tf.metrics.mean_squared_error,
+                'dev_mse',
                 labels=tf.expand_dims(dev_ele['hter'], 1),
                 predictions=self.dev_pred,
                 name="dev_mse")
-            self.dev_pearson = tf.contrib.metrics.streaming_pearson_correlation(
+            self.dev_pearson, self.dev_pearson_update, self.dev_pearson_reset = create_reset_metric(
+                tf.contrib.metrics.streaming_pearson_correlation,
+                'dev_pearson',
                 labels=tf.expand_dims(dev_ele['hter'], 1),
                 predictions=self.dev_pred,
                 name="dev_pearson")
         with tf.variable_scope('test'):
-            pred = self.predict(test_ele['src'], test_ele['tgt'], test_ele['src_len'], test_ele['tgt_len'])
-            self.test_mse = tf.metrics.mean_squared_error(
+            self.test_pred = self.predict(
+                test_ele['src'], test_ele['tgt'], test_ele['src_len'], test_ele['tgt_len'])
+            self.test_mse, _ = tf.metrics.mean_squared_error(
                 labels=tf.expand_dims(test_ele['hter'], 1),
                 predictions=pred)
-            self.test_pearson = tf.contrib.metrics.streaming_pearson_correlation(
+            self.test_pearson, _ = tf.contrib.metrics.streaming_pearson_correlation(
                 labels=tf.expand_dims(test_ele['hter'], 1),
                 predictions=pred)
 
@@ -234,20 +267,29 @@ with tf.Session() as sess:
     sess.run(tf.local_variables_initializer())  # for pearson op
     sess.run(tf.tables_initializer())
     sess.run(model.train_iter.initializer)
-    sess.run(model.dev_iter.initializer)
-    sess.run(model.test_iter.initializer)
     writer = tf.summary.FileWriter('logs', sess.graph)
 
     for step in range(STEPS):
         loss, pred, _ = sess.run([model.loss, model.train_pred, model.train_op])
         print('Step %d: loss=%f' % (step, loss))
-        print('pred', pred)
+        # print('pred', pred)
         if step % EVAL_STEPS == 0:
-            pred, label, mse, pearson = sess.run([model.dev_pred, model.dev_label, model.dev_mse, model.dev_pearson])
-            print('pred', pred)
-            print('label', label)
-            print('mse', mse)
-            print('pearson', pearson)
+            try:
+                sess.run(model.dev_iter.initializer)
+                sess.run(model.dev_mse_reset)
+                sess.run(model.dev_pearson_reset)
+                while True:
+                    mse, pearson = sess.run([model.dev_mse_update, model.dev_pearson_update])
+            except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
+                pass
             print('Eval %d: mse=%f, pearson=%f' % (step // EVAL_STEPS, mse, pearson))
 
     # 等下，test不应该shuffle的。。。
+    try:
+        sess.run(model.test_iter.initializer)
+        try:
+            while True:
+                mse, pearson = sess.run([model.test_mse, model.test_pearson])
+        except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
+            pass
+        print('Test: mse=%f, pearson=%f' % mse, pearson)
