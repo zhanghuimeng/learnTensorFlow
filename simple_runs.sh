@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 data_dir=~/Documents/MT/projects/201810ineval_deen/data/processed
-python_cmd="python"
+python_cmd="python -u"
 
 while getopts "d:bqs" arg
 do

@@ -65,7 +65,6 @@ def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, one_shot=Fa
     }
     if not one_shot:
         dataset = dataset.shuffle(buffer_size=10000)
-    else:
         dataset = dataset.repeat()
     dataset = dataset.padded_batch(BATCH_SIZE, padded_shapes=padded_shapes, padding_values=padding_values)
     return dataset
@@ -292,8 +291,10 @@ with tf.Session() as sess:
                 sess.run(model.dev_pearson_reset)
                 while True:
                     mse, pearson = sess.run([model.dev_mse_update, model.dev_pearson_update])
+                    print('Eval (in the middle) %d: mse=%f, pearson=%f' % (step // EVAL_STEPS, mse, pearson))
             except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
                 pass
+            mse, pearson = sess.run([model.dev_mse, model.dev_pearson])
             print('Eval %d: mse=%f, pearson=%f' % (step // EVAL_STEPS, mse, pearson))
             dev_summary.value[0].simple_value = mse
             dev_summary.value[1].simple_value = pearson
