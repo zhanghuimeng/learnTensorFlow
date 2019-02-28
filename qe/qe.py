@@ -291,7 +291,7 @@ with tf.Session() as sess:
                 sess.run(model.dev_pearson_reset)
                 while True:
                     mse, pearson = sess.run([model.dev_mse_update, model.dev_pearson_update])
-                    print('Eval (in the middle) %d: mse=%f, pearson=%f' % (step // EVAL_STEPS, mse, pearson))
+                    # print('Eval (in the middle) %d: mse=%f, pearson=%f' % (step // EVAL_STEPS, mse, pearson))
             except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
                 pass
             mse, pearson = sess.run([model.dev_mse, model.dev_pearson])
