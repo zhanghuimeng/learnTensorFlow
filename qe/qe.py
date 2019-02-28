@@ -160,10 +160,10 @@ class Model:
         with tf.variable_scope('test'):
             self.test_pred = self.predict(
                 test_ele['src'], test_ele['tgt'], test_ele['src_len'], test_ele['tgt_len'])
-            self.test_mse, _ = tf.metrics.mean_squared_error(
+            self.test_mse, self.test_mse_update = tf.metrics.mean_squared_error(
                 labels=tf.expand_dims(test_ele['hter'], 1),
                 predictions=self.test_pred)
-            self.test_pearson, _ = tf.contrib.metrics.streaming_pearson_correlation(
+            self.test_pearson, self.test_pearson_update = tf.contrib.metrics.streaming_pearson_correlation(
                 labels=tf.expand_dims(test_ele['hter'], 1),
                 predictions=self.test_pred)
 
@@ -305,7 +305,8 @@ with tf.Session() as sess:
     sess.run(model.test_iter.initializer)
     try:
         while True:
-            mse, pearson = sess.run([model.test_mse, model.test_pearson])
+            mse, pearson = sess.run([model.test_mse_update, model.test_pearson_update])
     except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
         pass
+    mse, pearson = sess.run([model.test_mse, model.test_pearson])
     print('Test: mse=%f, pearson=%f' % mse, pearson)
