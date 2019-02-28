@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 
 data_dir=~/Documents/MT/projects/201810ineval_deen/data/processed
-python_cmd="python -u"
+python_cmd="venv/bin/python -u"
+set +x  # echo on
 
-while getopts "d:bqs" arg
+while getopts "d:bqsg" arg
 do
     case $arg in
+        g)
+            python_cmd="venv-gpu/bin/python -u"
+            ;;
         d)
             if [[ "0" -le "$OPTARG" && "$OPTARG" -lt "8" ]]
             then
                 export CUDA_VISIBLE_DEVICES=$OPTARG
-                python_cmd="venv-gpu/bin/python -u"
-            else
-                python_cmd="venv/bin/python -u"
             fi
             ;;
         b)

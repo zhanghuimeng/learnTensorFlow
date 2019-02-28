@@ -6,8 +6,8 @@ import argparse
 BATCH_SIZE = 32
 STEPS = 2000
 EVAL_STEPS = 50
-EMB_SIZE = 1000
-HIDDEN_SIZE = 500
+EMB_SIZE = 500
+HIDDEN_SIZE = 200
 LR = 1e-3
 
 
@@ -241,19 +241,21 @@ args = parser.parse_args()
 with tf.device('/cpu:0'):
     print("Loading vocabulary from %s and %s ..." % (args.vocab[0], args.vocab[1]))
     vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt = read_vocab(args.vocab[0], args.vocab[1])
-    with tf.Session() as sess:
-        sess.run(tf.tables_initializer())
-        src_vocab_size = sess.run(vocab_idx_src.size())
-        tgt_vocab_size = sess.run(vocab_idx_tgt.size())
+    # with tf.Session() as sess:
+    # 为了debug
+    # with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+    #     sess.run(tf.tables_initializer())
+    #     src_vocab_size = sess.run(vocab_idx_src.size())
+    #     tgt_vocab_size = sess.run(vocab_idx_tgt.size())
     # 没法用sess来算，只好直接行数+1了！
-    # src_vocab_size = 1
-    # with open(args.vocab[0], 'r') as f:
-    #     for line in f:
-    #         src_vocab_size += 1
-    # tgt_vocab_size = 1
-    # with open(args.vocab[1], 'r') as f:
-    #     for line in f:
-    #         tgt_vocab_size += 1
+    src_vocab_size = 1
+    with open(args.vocab[0], 'r') as f:
+        for line in f:
+            src_vocab_size += 1
+    tgt_vocab_size = 1
+    with open(args.vocab[1], 'r') as f:
+        for line in f:
+            tgt_vocab_size += 1
     print('Loaded src vocabulary size %d' % src_vocab_size)
     print('Loaded tgt vocabulary size %d' % tgt_vocab_size)
     train_dataset, dev_dataset, test_dataset \
@@ -266,12 +268,17 @@ model = Model(train_dataset,
               src_vocab_size=src_vocab_size,
               tgt_vocab_size=tgt_vocab_size,
               learning_rate=LR)
+print('Debugging: Built computation model...')
 with tf.Session() as sess:
+# 还是为了debug
+# with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+    print('Debugging: Running initialization...')
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())  # for pearson op
     sess.run(tf.tables_initializer())
     sess.run(model.train_iter.initializer)
     # 打印到tensorboard
+    print('Debugging: Preparing tensorboard...')
     writer = tf.summary.FileWriter('logs', sess.graph)
     train_summary = tf.Summary()
     train_summary.value.add(tag='train loss', simple_value=None)
@@ -279,6 +286,7 @@ with tf.Session() as sess:
     dev_summary.value.add(tag='dev mse', simple_value=None)
     dev_summary.value.add(tag='dev pearson', simple_value=None)
 
+    print('Debugging: Ready to start training...')
     for step in range(STEPS):
         loss, _ = sess.run([model.loss, model.train_op])
         print('Step %d: loss=%f' % (step, loss))
@@ -309,4 +317,4 @@ with tf.Session() as sess:
     except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
         pass
     mse, pearson = sess.run([model.test_mse, model.test_pearson])
-    print('Test: mse=%f, pearson=%f' % mse, pearson)
+    print('Test: mse=%f, pearson=%f' % (mse, pearson))
