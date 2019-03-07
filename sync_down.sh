@@ -1,2 +1,3 @@
+#!/usr/bin/env bash
 rsync -avz --exclude '.idea' --exclude '.git' \
-    zhm@166.111.5.234:/data/disk4/private/zhm/201902learnTF/learnTensorFlow/ ~/Documents/learnTensorFlow
+    242:/data/disk2/private/zhm/201902_learnTF/learnTensorFlow/ ~/Documents/learnTensorFlow

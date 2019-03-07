@@ -1,1 +1,2 @@
-sshfs zhm@166.111.5.234:/data/disk4/private/zhm ~/Documents/MT/external
+#!/usr/bin/env bash
+sshfs 242:/data/disk2/private/zhm ~/Documents/MT/external
