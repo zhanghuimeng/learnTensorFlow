@@ -3,12 +3,13 @@ import tensorflow as tf
 import argparse
 
 
-BATCH_SIZE = 32
-STEPS = 2000
+BATCH_SIZE = 50
+MAX_EPOCH = 500
+PATIENCE = 5
 EVAL_STEPS = 50
-EMB_SIZE = 500
-HIDDEN_SIZE = 200
-LR = 1e-3
+EMB_SIZE = 300
+HIDDEN_SIZE = 50
+LR = 1.0
 
 
 # https://github.com/tensorflow/tensorflow/issues/4814
@@ -35,7 +36,7 @@ def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, one_shot=Fa
     hter = tf.data.TextLineDataset(hter)
     src = src.map(lambda string: tf.string_split([string]).values)
     tgt = tgt.map(lambda string: tf.string_split([string]).values)
-    hter = hter.map(lambda x: tf.strings.to_number(x))
+    hter = hter.map(lambda x: tf.string_to_number(x))
     src = src.map(lambda tokens: vocab_idx_src.lookup(tokens))
     src_len = src.map(lambda tokens: tf.size(tokens))
     tgt = tgt.map(lambda tokens: vocab_idx_tgt.lookup(tokens))
@@ -142,7 +143,7 @@ class Model:
             self.loss = tf.losses.mean_squared_error(
                 labels=tf.expand_dims(train_ele['hter'], 1),
                 predictions=self.train_pred)
-            self.train_op = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss)
+            self.train_op = tf.train.AdadeltaOptimizer(learning_rate=learning_rate).minimize(self.loss)
         with tf.variable_scope('dev'):
             self.dev_pred = self.predict(dev_ele['src'], dev_ele['tgt'], dev_ele['src_len'], dev_ele['tgt_len'])
             self.dev_mse, self.dev_mse_update, self.dev_mse_reset = create_reset_metric(
