@@ -6,9 +6,9 @@ import argparse
 BATCH_SIZE = 50
 MAX_EPOCH = 500
 PATIENCE = 5
-EVAL_STEPS = 50
 EMB_SIZE = 300
-HIDDEN_SIZE = 50
+ENC_HIDDEN_SIZE = 50
+DEC_HIDDEN_SIZE = 500
 LR = 1.0
 
 
@@ -30,7 +30,7 @@ def read_vocab(src, tgt):
     return vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt
 
 
-def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, one_shot=False):
+def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt):
     src = tf.data.TextLineDataset(src)
     tgt = tf.data.TextLineDataset(tgt)
     hter = tf.data.TextLineDataset(hter)
@@ -64,9 +64,7 @@ def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, one_shot=Fa
         'tgt_len': tf.constant(0),
         'hter': tf.constant(0.0)
     }
-    if not one_shot:
-        dataset = dataset.shuffle(buffer_size=10000)
-        dataset = dataset.repeat()
+    dataset = dataset.shuffle(buffer_size=10000)
     dataset = dataset.padded_batch(BATCH_SIZE, padded_shapes=padded_shapes, padding_values=padding_values)
     return dataset
 
@@ -83,29 +81,21 @@ def data_loader(vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt):
         tgt=args.dev[1],
         hter=args.dev[2],
         vocab_idx_src=vocab_idx_src,
-        vocab_idx_tgt=vocab_idx_tgt,
-        one_shot=True)
+        vocab_idx_tgt=vocab_idx_tgt)
     test_dataset = one_dataset_loader(
         src=args.test[0],
         tgt=args.test[1],
         hter=args.test[2],
         vocab_idx_src=vocab_idx_src,
-        vocab_idx_tgt=vocab_idx_tgt,
-        one_shot=True)
-    # iterator = training_dataset.make_initializable_iterator()
-    # next_element = iterator.get_next()
-    # with tf.Session() as sess:
-    #     sess.run(tf.tables_initializer())  # 为何需要explicitly initialize这个呢？
-    #     sess.run(iterator.initializer)
-    #     for i in range(2):
-    #         print(sess.run(next_element))
+        vocab_idx_tgt=vocab_idx_tgt)
     return train_dataset, dev_dataset, test_dataset
 
 
 class Model:
-    def __init__(self, train_dataset, dev_dataset, hidden_size, src_vocab_size, tgt_vocab_size, emb_size,
-                 learning_rate):
-        self.hidden_size = hidden_size
+    def __init__(self, train_dataset, dev_dataset, enc_hidden_size, dec_hidden_size,
+                 src_vocab_size, tgt_vocab_size, emb_size, learning_rate):
+        self.enc_hidden_size = enc_hidden_size
+        self.dec_hidden_size = dec_hidden_size
         # 一次做完training dev test好像不太对，但现在先这样好了……
         with tf.variable_scope('inputs'):
             self.train_iter = train_dataset.make_initializable_iterator()
@@ -119,14 +109,14 @@ class Model:
             self.tgt_emb = tf.get_variable("tgt_embeddings", [tgt_vocab_size, emb_size], dtype=tf.float32)
         with tf.variable_scope('src_rnn'):
             self.src_rnn_cell = {
-                'f': tf.nn.rnn_cell.GRUCell(hidden_size),
-                'w': tf.nn.rnn_cell.GRUCell(hidden_size)}
+                'f': tf.nn.rnn_cell.GRUCell(enc_hidden_size),
+                'w': tf.nn.rnn_cell.GRUCell(enc_hidden_size)}
         with tf.variable_scope('tgt_rnn'):
             self.tgt_rnn_cell = {
-                'f': tf.nn.rnn_cell.GRUCell(hidden_size),
-                'w': tf.nn.rnn_cell.GRUCell(hidden_size)}
+                'f': tf.nn.rnn_cell.GRUCell(enc_hidden_size),
+                'w': tf.nn.rnn_cell.GRUCell(enc_hidden_size)}
         with tf.variable_scope('attention'):
-            self.weight_a = tf.get_variable('W_a', shape=[2 * self.hidden_size, 1], dtype=tf.float32,
+            self.weight_a = tf.get_variable('W_a', shape=[2 * self.dec_hidden_size, 1], dtype=tf.float32,
                                             initializer=tf.initializers.random_normal(0.1))
             self.dense = tf.layers.Dense(units=1)
         with tf.variable_scope('training'):
@@ -135,11 +125,6 @@ class Model:
                 tgt=train_ele['tgt'],
                 src_len=train_ele['src_len'],
                 tgt_len=train_ele['tgt_len'])
-            # with tf.Session() as sess:
-            #     sess.run(tf.tables_initializer())
-            #     sess.run(self.train_iter.initializer)
-            #     sess.run(tf.global_variables_initializer())
-            #     print('pred:', sess.run(tf.shape(pred)))
             self.loss = tf.losses.mean_squared_error(
                 labels=tf.expand_dims(train_ele['hter'], 1),
                 predictions=self.train_pred)
@@ -179,19 +164,8 @@ class Model:
                 dtype=tf.float32,  # 如果不给定RNN initial state，则必须给定dtype（是状态的dtype！）
                 sequence_length=src_len)
             src_h = src_h[0]  # 原来是(outputs, output_states)
-            # with tf.Session() as sess:
-            #     sess.run(tf.tables_initializer())
-            #     sess.run(train_iter.initializer)
-            #     sess.run(tf.global_variables_initializer())
-            #     print('src_h: ')
-            #     print(sess.run(tf.shape(src_h[0])))
-            #     print(sess.run(tf.shape(src_h[1])))
             src_h = tf.concat(src_h, 2)
         with tf.variable_scope('tgt_birnn'):
-            # with tf.Session() as sess:
-            #     sess.run(tf.tables_initializer())
-            #     sess.run(train_iter.initializer)
-            #     print(sess.run(train_src))
             tgt_h = tf.nn.bidirectional_dynamic_rnn(
                 self.tgt_rnn_cell['f'],
                 self.tgt_rnn_cell['w'],
@@ -201,14 +175,6 @@ class Model:
             tgt_h = tgt_h[0]
             tgt_h = tf.concat(tgt_h, 2)
         h = tf.concat([src_h, tgt_h], 1)
-        # 打印h的形状
-        # with tf.Session() as sess:
-        #     sess.run(tf.tables_initializer())
-        #     sess.run(train_iter.initializer)
-        #     sess.run(tf.global_variables_initializer())
-        #     print(sess.run(tf.shape(src_h)))
-        #     print(sess.run(tf.shape(tgt_h)))
-        #     print(sess.run(tf.shape(h)))
         # 对h进行attention
         # [66, 1000]
         def unbatch_h(h):
@@ -221,11 +187,6 @@ class Model:
             v = tf.reduce_sum(tf.multiply(tf.expand_dims(a, 1), h), 0)
             return v
         v = tf.map_fn(unbatch_h, h)
-        # with tf.Session() as sess:
-        #     sess.run(tf.tables_initializer())
-        #     sess.run(self.train_iter.initializer)
-        #     sess.run(tf.global_variables_initializer())
-        #     print('v:', sess.run(tf.shape(v)))
         v = self.dense(v)
         pred = tf.nn.sigmoid(v)
         return pred
@@ -264,7 +225,8 @@ with tf.device('/cpu:0'):
 print('Building computation model...')
 model = Model(train_dataset,
               dev_dataset,
-              hidden_size=HIDDEN_SIZE,
+              enc_hidden_size=ENC_HIDDEN_SIZE,
+              dec_hidden_size=DEC_HIDDEN_SIZE,
               emb_size=EMB_SIZE,
               src_vocab_size=src_vocab_size,
               tgt_vocab_size=tgt_vocab_size,
@@ -273,13 +235,12 @@ print('Debugging: Built computation model...')
 with tf.Session() as sess:
 # 还是为了debug
 # with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
-    print('Debugging: Running initialization...')
+#     print('Debugging: Running initialization...')
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())  # for pearson op
     sess.run(tf.tables_initializer())
-    sess.run(model.train_iter.initializer)
     # 打印到tensorboard
-    print('Debugging: Preparing tensorboard...')
+    # print('Debugging: Preparing tensorboard...')
     writer = tf.summary.FileWriter('logs', sess.graph)
     train_summary = tf.Summary()
     train_summary.value.add(tag='train loss', simple_value=None)
@@ -287,28 +248,47 @@ with tf.Session() as sess:
     dev_summary.value.add(tag='dev mse', simple_value=None)
     dev_summary.value.add(tag='dev pearson', simple_value=None)
 
-    print('Debugging: Ready to start training...')
-    for step in range(STEPS):
-        loss, _ = sess.run([model.loss, model.train_op])
-        print('Step %d: loss=%f' % (step, loss))
-        train_summary.value[0].simple_value = loss
-        writer.add_summary(train_summary, step)
-        if step % EVAL_STEPS == 0:
+    # print('Debugging: Ready to start training...')
+    step = 0
+    no_improve_epochs = 0
+    pearson_list = []
+    for epoch in range(MAX_EPOCH):
+        print("Epoch %d" % epoch)
+        sess.run(model.train_iter.initializer)
+
+        while True:
             try:
+                loss, _ = sess.run([model.loss, model.train_op])
+                print('Step %d: loss=%f' % (step, loss))
+                train_summary.value[0].simple_value = loss
+                writer.add_summary(train_summary, step)
+                step += 1
+            except tf.errors.OutOfRangeError:  # 到达epoch最后
                 sess.run(model.dev_iter.initializer)
                 sess.run(model.dev_mse_reset)
                 sess.run(model.dev_pearson_reset)
-                while True:
-                    mse, pearson = sess.run([model.dev_mse_update, model.dev_pearson_update])
-                    # print('Eval (in the middle) %d: mse=%f, pearson=%f' % (step // EVAL_STEPS, mse, pearson))
-            except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
-                pass
-            mse, pearson = sess.run([model.dev_mse, model.dev_pearson])
-            print('Eval %d: mse=%f, pearson=%f' % (step // EVAL_STEPS, mse, pearson))
-            dev_summary.value[0].simple_value = mse
-            dev_summary.value[1].simple_value = pearson
-            writer.add_summary(dev_summary, step)
+                try:
+                    while True:
+                        mse, pearson = sess.run([model.dev_mse_update, model.dev_pearson_update])
+                except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
+                    mse, pearson = sess.run([model.dev_mse, model.dev_pearson])
+                    print('Epoch %d: mse=%f, pearson=%f' % (epoch, mse, pearson))
+                    dev_summary.value[0].simple_value = mse
+                    dev_summary.value[1].simple_value = pearson
+                    writer.add_summary(dev_summary, step)
+                    # perform early stopping
+                    if len(pearson_list) > 0 and pearson <= pearson_list[-1]:
+                        no_improve_epochs += 1
+                    else:
+                        no_improve_epochs = 0
+                    pearson_list.append(pearson)
+                    print('Patience: %d' % no_improve_epochs)
+                    break
+
         writer.flush()
+        if no_improve_epochs >= PATIENCE:
+            print('Training finished')
+            break
 
     # 等下，test不应该shuffle的。。。
     sess.run(model.test_iter.initializer)
@@ -316,6 +296,5 @@ with tf.Session() as sess:
         while True:
             mse, pearson = sess.run([model.test_mse_update, model.test_pearson_update])
     except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
-        pass
-    mse, pearson = sess.run([model.test_mse, model.test_pearson])
-    print('Test: mse=%f, pearson=%f' % (mse, pearson))
+        mse, pearson = sess.run([model.test_mse, model.test_pearson])
+        print('Test: mse=%f, pearson=%f' % (mse, pearson))
