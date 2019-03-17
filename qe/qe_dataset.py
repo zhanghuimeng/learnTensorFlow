@@ -8,7 +8,8 @@ def read_vocab(src, tgt):
     vocab_str_tgt = tf.contrib.lookup.index_to_string_table_from_file(tgt, default_value='<unk>')
     return vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt
 
-def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, batch_size):
+
+def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, batch_size, shuffle=False):
     src = tf.data.TextLineDataset(src)
     tgt = tf.data.TextLineDataset(tgt)
     hter = tf.data.TextLineDataset(hter)
@@ -42,22 +43,8 @@ def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, batch_size)
         'tgt_len': tf.constant(0),
         'hter': tf.constant(0.0)
     }
-    dataset = dataset.shuffle(buffer_size=10000)
+    if shuffle:
+        dataset = dataset.shuffle(buffer_size=10000)
+        dataset = dataset.repeat(0)
     dataset = dataset.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
     return dataset
-
-
-def data_loader(vocab_idx_src, vocab_idx_tgt, args):
-    train_dataset = one_dataset_loader(
-        src=args.train[0],
-        tgt=args.train[1],
-        hter=args.train[2],
-        vocab_idx_src=vocab_idx_src,
-        vocab_idx_tgt=vocab_idx_tgt)
-    dev_dataset = one_dataset_loader(
-        src=args.dev[0],
-        tgt=args.dev[1],
-        hter=args.dev[2],
-        vocab_idx_src=vocab_idx_src,
-        vocab_idx_tgt=vocab_idx_tgt)
-    return train_dataset, dev_dataset

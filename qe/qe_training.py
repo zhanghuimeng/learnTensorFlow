@@ -36,7 +36,8 @@ with tf.device('/cpu:0'):
         hter=args.train[2],
         vocab_idx_src=vocab_idx_src,
         vocab_idx_tgt=vocab_idx_tgt,
-        batch_size=BATCH_SIZE)
+        batch_size=BATCH_SIZE,
+        shuffle=True)
     dev_dataset = one_dataset_loader(
         src=args.dev[0],
         tgt=args.dev[1],
@@ -45,32 +46,74 @@ with tf.device('/cpu:0'):
         vocab_idx_tgt=vocab_idx_tgt,
         batch_size=BATCH_SIZE)
 # print('Building computation model...')
+handle = tf.placeholder(tf.string, shape=[])
+iterator = tf.data.Iterator.from_string_handle(
+    handle, train_dataset.output_types, train_dataset.output_shapes)
+ele = iterator.get_next()
 train_iter = train_dataset.make_initializable_iterator()
-train_ele = train_iter.get_next()
 dev_iter = dev_dataset.make_initializable_iterator()
-dev_ele = dev_iter.get_next()
+
 model = Model(enc_hidden_size=ENC_HIDDEN_SIZE,
               dec_hidden_size=DEC_HIDDEN_SIZE,
               emb_size=EMB_SIZE,
               src_vocab_size=src_vocab_size,
               tgt_vocab_size=tgt_vocab_size,
-              learning_rate=LR)
-# print('Debugging: Built computation model...')
-model.training(src=train_ele['src'],
-               tgt=train_ele['tgt'],
-               src_len=train_ele['src_len'],
-               tgt_len=train_ele['tgt_len'],
-               hter=train_ele['hter'])
-model.testing(src=dev_ele['src'],
-              tgt=dev_ele['tgt'],
-              src_len=dev_ele['src_len'],
-              tgt_len=dev_ele['tgt_len'],
-              hter=dev_ele['hter'])
+              learning_rate=LR,
+              src=ele['src'],
+              tgt=ele['tgt'],
+              src_len=ele['src_len'],
+              tgt_len=ele['tgt_len'],
+              hter=ele['hter'])
+
+# 测试保存和eval
+with tf.Session() as sess:
+    sess.run(tf.global_variables_initializer())
+    sess.run(tf.local_variables_initializer())  # for pearson op
+    sess.run(tf.tables_initializer())
+    sess.run(dev_iter.initializer)
+    # 这很重要。每次好像都要重新为session run一遍。。
+    train_handle = sess.run(train_iter.string_handle())
+    dev_handle = sess.run(dev_iter.string_handle())
+    sess.run(model.mse_reset)
+    sess.run(model.pearson_reset)
+    try:
+        while True:
+            mse, pearson = sess.run([model.mse_update, model.pearson_update], feed_dict={handle: dev_handle})
+    except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
+        mse, pearson = sess.run([model.mse, model.pearson], feed_dict={handle: dev_handle})
+        print('before saving: mse=%f, pearson=%f' % (mse, pearson))
+
+    # tvars = tf.trainable_variables()  # 看来这个和下面还不一样
+    # for n in tf.get_default_graph().as_graph_def().node:
+    #     print(n.name)
+
+    saver = tf.train.Saver()
+    saver.save(sess, "model/qe/test.ckpt")
+    print("model saved.")
+
+with tf.Session() as sess:
+    saver.restore(sess, "model/qe/test.ckpt")
+    print("model restored.")
+    sess.run(tf.local_variables_initializer())  # 这个需要吗？
+    sess.run(tf.tables_initializer())  # 看起来table需要单独initialize
+    sess.run(dev_iter.initializer)
+    train_handle = sess.run(train_iter.string_handle())
+    dev_handle = sess.run(dev_iter.string_handle())
+    sess.run(model.mse_reset)
+    sess.run(model.pearson_reset)
+    try:
+        while True:
+            mse, pearson = sess.run([model.mse_update, model.pearson_update], feed_dict={handle: dev_handle})
+    except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
+        mse, pearson = sess.run([model.mse, model.pearson], feed_dict={handle: dev_handle})
+        print('after saving: mse=%f, pearson=%f' % (mse, pearson))
 
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())  # for pearson op
     sess.run(tf.tables_initializer())
+    train_handle = sess.run(train_iter.string_handle())
+    dev_handle = sess.run(dev_iter.string_handle())
     # 打印到tensorboard
     # print('Debugging: Preparing tensorboard...')
     saver = tf.train.Saver()
@@ -91,25 +134,26 @@ with tf.Session() as sess:
 
         while True:
             try:
-                loss, _ = sess.run([model.loss, model.train_op])
+                loss, _ = sess.run([model.loss, model.train_op], feed_dict={handle: train_handle})
                 print('Step %d: loss=%f' % (step, loss))
                 train_summary.value[0].simple_value = loss
                 writer.add_summary(train_summary, step)
                 step += 1
             except tf.errors.OutOfRangeError:  # 到达epoch最后
                 sess.run(dev_iter.initializer)
-                sess.run(model.test_mse_reset)
-                sess.run(model.test_pearson_reset)
+                sess.run(model.mse_reset)
+                sess.run(model.pearson_reset)
                 try:
                     while True:
-                        mse, pearson = sess.run([model.test_mse_update, model.test_pearson_update])
+                        mse, pearson = sess.run([model.mse_update, model.pearson_update],
+                                                feed_dict={handle: dev_handle})
                 except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
-                    mse, pearson = sess.run([model.test_mse, model.test_pearson])
+                    mse, pearson = sess.run([model.mse, model.pearson], feed_dict={handle: dev_handle})
                     print('Epoch %d: mse=%f, pearson=%f' % (epoch, mse, pearson))
                     dev_summary.value[0].simple_value = mse
                     dev_summary.value[1].simple_value = pearson
                     writer.add_summary(dev_summary, step)
-                    saver.save(sess, "model/qe/epoch_%d.ckpt" % epoch)
+                    saver.save(sess, "model/qe/qe.ckpt", global_step=step)
                     # perform early stopping
                     if best_pearson is not None and pearson <= best_pearson:
                         no_improve_epochs += 1
