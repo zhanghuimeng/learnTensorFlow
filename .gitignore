@@ -3,6 +3,7 @@ venv**/*
 **/logs/*
 logs/
 **/saved_graph/*
+models/
 
 # Compiled source #
 ###################

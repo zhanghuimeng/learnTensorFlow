@@ -109,7 +109,7 @@ with tf.Session() as sess:
                     dev_summary.value[0].simple_value = mse
                     dev_summary.value[1].simple_value = pearson
                     writer.add_summary(dev_summary, step)
-                    saver.save(sess, "model/epoch_%d.ckpt" % epoch)
+                    saver.save(sess, "model/qe/epoch_%d.ckpt" % epoch)
                     # perform early stopping
                     if best_pearson is not None and pearson <= best_pearson:
                         no_improve_epochs += 1
