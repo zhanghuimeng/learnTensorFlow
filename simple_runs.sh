@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-data_dir=~/Documents/MT/projects/201810ineval_deen/data/processed
+# data_dir=~/Documents/MT/projects/201810ineval_deen/data/processed
 python_cmd="python -u"
 set +x  # echo on
 
@@ -22,11 +22,10 @@ do
                 --name "data/test.en.vocab"
             ;;
         q)
-            $python_cmd qe/qe.py \
+            $python_cmd qe/qe_training.py \
                 --train data/qe-2017/train.src data/qe-2017/train.mt data/qe-2017/train.hter \
                 --vocab data/qe-2017/src.vocab data/qe-2017/tgt.vocab \
-                --dev data/qe-2017/dev.src data/qe-2017/dev.mt data/qe-2017/dev.hter \
-                --test data/qe-2017/test.src data/qe-2017/test.mt data/qe-2017/test.hter
+                --dev data/qe-2017/dev.src data/qe-2017/dev.mt data/qe-2017/dev.hter
             ;;
         s)
             $python_cmd seq2seq/seq2seq.py \
