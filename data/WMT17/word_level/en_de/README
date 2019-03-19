@@ -1,0 +1,14 @@
+Data files:
+	train.* --- training data: 11.000 new training + 12.000 2016 training
+	dev.* --- 2016 dev set
+
+word_level/
+	*.mt --- automatic translation
+	*.pe --- post-edition
+	*.src --- source
+	*.tags --- word-level tags (OK/BAD). Produced with TERCOM with default settings and `-d 0` option
+	*.align --- alignments between source and mt
+	features/ --- baseline features
+		*.features --- feature set
+		feature_list --- feature description
+All text files are tokenized.

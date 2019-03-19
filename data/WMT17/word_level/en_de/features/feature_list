@@ -1,0 +1,28 @@
+number of tokens in the source
+number of tokens in the target
+ratio of source and target sentences lenght
+target word
+left context of the target word
+right context of the target word
+source word aligned to the target word
+left context of the aligned source word
+right context of the aligned source word
+target word is stopword
+target word is punctuation mark
+target word is proper noun
+target word is digit
+highest order of ngram that includes target word and its left context
+highest order of ngram that includes target word and its right context
+backoff behavior of ngram w_{i-2} w_{i-1} w_{i} (w_{i} - target word)
+backoff behavior of ngram w_{i-1} w_{i} w_{i+1}
+backoff behavior of ngram w_{i} w_{i+1} w_{i+2}
+highest order of ngram that includes source word and its left context
+highest order of ngram that includes source word and its right context
+POS of the target word
+POS of the aligned source word
+target word + left context
+target word + right context
+target word + aligned source word
+POS of target word + POS of aligned source word
+target word + left context + source word
+target word + right context + source word
