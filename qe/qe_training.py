@@ -20,6 +20,11 @@ parser.add_argument('--vocab', type=str, nargs=2, help='Parallel vocab files (wi
 parser.add_argument('--dev', type=str, nargs=3, help='Parallel development files and HTER score')
 args = parser.parse_args()
 
+# 设置不耗尽显存
+config = tf.ConfigProto()
+config.gpu_options.allow_growth=True
+sess = tf.Session(config=config)
+
 # 据说把数据预处理放在CPU上是best practice
 with tf.device('/cpu:0'):
     print("Loading vocabulary from %s and %s ..." % (args.vocab[0], args.vocab[1]))
@@ -153,13 +158,14 @@ with tf.Session() as sess:
                     dev_summary.value[0].simple_value = mse
                     dev_summary.value[1].simple_value = pearson
                     writer.add_summary(dev_summary, step)
-                    saver.save(sess, "model/qe/qe.ckpt", global_step=step)
                     # perform early stopping
                     if best_pearson is not None and pearson <= best_pearson:
                         no_improve_epochs += 1
                     else:
                         no_improve_epochs = 0
                         best_pearson = pearson
+                        # only save when improved
+                        saver.save(sess, 'model/qe/qe.ckpt', global_step=step)
                     print('Patience: %d' % no_improve_epochs)
                     break
 

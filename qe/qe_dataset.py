@@ -45,6 +45,5 @@ def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, batch_size,
     }
     if shuffle:
         dataset = dataset.shuffle(buffer_size=10000)
-        dataset = dataset.repeat(0)
     dataset = dataset.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
     return dataset

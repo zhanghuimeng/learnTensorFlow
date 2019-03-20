@@ -19,11 +19,11 @@ do
                 --dev data/qe-2017/dev.src data/qe-2017/dev.mt data/qe-2017/dev.hter
             ;;
         t)
-            # --test data/qe-2017/test.src data/qe-2017/test.mt data/qe-2017/test.hter \
+            # --test data/qe-2017/dev.src data/qe-2017/dev.mt data/qe-2017/dev.hter \
             $python_cmd qe/qe_test.py \
                 --vocab data/qe-2017/src.vocab data/qe-2017/tgt.vocab \
-                --test data/qe-2017/dev.src data/qe-2017/dev.mt data/qe-2017/dev.hter \
-                --model model/qe/test.ckpt \
+                --test data/qe-2017/test.src data/qe-2017/test.mt data/qe-2017/test.hter \
+                --model model/qe/qe.ckpt-3220 \
                 --output qe2017.output.hter
             ;;
         s)
