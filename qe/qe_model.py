@@ -25,7 +25,7 @@ class Model:
         self.learning_rate = learning_rate
         self.training = tf.placeholder(dtype=tf.bool, name='isTraining')  # 是否正在训练
         self.all_pred = tf.get_variable(name='all_pred', dtype=tf.float32, shape=[0, 1])
-        l2 = tf.keras.regularizers.l2(1e-4)  # 是否有问题？
+        l2 = tf.contrib.layers.l2_regularizer(scale=1e-4)
         with tf.variable_scope('embedding'):
             # 细节：glorot_uniform_initializer
             self.src_emb = tf.get_variable("src_embeddings", [src_vocab_size, emb_size], dtype=tf.float32,
