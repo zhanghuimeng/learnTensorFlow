@@ -16,15 +16,16 @@ do
             $python_cmd qe/qe_training.py \
                 --train data/qe-2017/train.src data/qe-2017/train.mt data/qe-2017/train.hter \
                 --vocab data/qe-2017/src.vocab data/qe-2017/tgt.vocab \
-                --dev data/qe-2017/dev.src data/qe-2017/dev.mt data/qe-2017/dev.hter
+                --dev data/qe-2017/dev.src data/qe-2017/dev.mt data/qe-2017/dev.hter \
+                --model_dir model/qe/
             ;;
         t)
-            # --test data/qe-2017/dev.src data/qe-2017/dev.mt data/qe-2017/dev.hter \
+            #--test data/qe-2017/dev.src data/qe-2017/dev.mt data/qe-2017/dev.hter \
             $python_cmd qe/qe_test.py \
                 --vocab data/qe-2017/src.vocab data/qe-2017/tgt.vocab \
-                --test data/qe-2017/test.src data/qe-2017/test.mt data/qe-2017/test.hter \
+                 --test data/qe-2017/test.src data/qe-2017/test.mt data/qe-2017/test.hter \
                 --model model/qe/qe.ckpt-3220 \
-                --output qe2017.output.hter
+                --output test.hter
             ;;
         s)
             $python_cmd seq2seq/seq2seq.py \

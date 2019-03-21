@@ -18,18 +18,18 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--train', type=str, nargs=3, help='Parallel training files and HTER score')
 parser.add_argument('--vocab', type=str, nargs=2, help='Parallel vocab files (with ctrl)')
 parser.add_argument('--dev', type=str, nargs=3, help='Parallel development files and HTER score')
+parser.add_argument('--model_dir', type=str, help='Output model dir')
 args = parser.parse_args()
 
 # 设置不耗尽显存
 config = tf.ConfigProto()
 config.gpu_options.allow_growth=True
-sess = tf.Session(config=config)
 
 # 据说把数据预处理放在CPU上是best practice
 with tf.device('/cpu:0'):
     print("Loading vocabulary from %s and %s ..." % (args.vocab[0], args.vocab[1]))
     vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt = read_vocab(args.vocab[0], args.vocab[1])
-    with tf.Session() as sess:
+    with tf.Session(config=config) as sess:
         sess.run(tf.tables_initializer())
         src_vocab_size = sess.run(vocab_idx_src.size())
         tgt_vocab_size = sess.run(vocab_idx_tgt.size())
@@ -71,7 +71,7 @@ model = Model(enc_hidden_size=ENC_HIDDEN_SIZE,
               hter=ele['hter'])
 
 # 测试保存和eval
-with tf.Session() as sess:
+with tf.Session(config=config) as sess:
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())  # for pearson op
     sess.run(tf.tables_initializer())
@@ -83,21 +83,19 @@ with tf.Session() as sess:
     sess.run(model.pearson_reset)
     try:
         while True:
-            mse, pearson = sess.run([model.mse_update, model.pearson_update], feed_dict={handle: dev_handle})
+            mse, pearson = sess.run([model.mse_update, model.pearson_update],
+                                    feed_dict={handle: dev_handle, model.training: False})
     except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
-        mse, pearson = sess.run([model.mse, model.pearson], feed_dict={handle: dev_handle})
+        mse, pearson = sess.run([model.mse, model.pearson],
+                                feed_dict={handle: dev_handle, model.training: False})
         print('before saving: mse=%f, pearson=%f' % (mse, pearson))
 
-    # tvars = tf.trainable_variables()  # 看来这个和下面还不一样
-    # for n in tf.get_default_graph().as_graph_def().node:
-    #     print(n.name)
-
     saver = tf.train.Saver()
-    saver.save(sess, "model/qe/test.ckpt")
+    saver.save(sess, args.model_dir + "test.ckpt")
     print("model saved.")
 
-with tf.Session() as sess:
-    saver.restore(sess, "model/qe/test.ckpt")
+with tf.Session(config=config) as sess:
+    saver.restore(sess, args.model_dir + "test.ckpt")
     print("model restored.")
     sess.run(tf.local_variables_initializer())  # 这个需要吗？
     sess.run(tf.tables_initializer())  # 看起来table需要单独initialize
@@ -108,12 +106,15 @@ with tf.Session() as sess:
     sess.run(model.pearson_reset)
     try:
         while True:
-            mse, pearson = sess.run([model.mse_update, model.pearson_update], feed_dict={handle: dev_handle})
+            mse, pearson = sess.run([model.mse_update, model.pearson_update],
+                                    feed_dict={handle: dev_handle, model.training: False})
     except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
-        mse, pearson = sess.run([model.mse, model.pearson], feed_dict={handle: dev_handle})
+        mse, pearson = sess.run([model.mse, model.pearson],
+                                feed_dict={handle: dev_handle, model.training: False})
         print('after saving: mse=%f, pearson=%f' % (mse, pearson))
 
-with tf.Session() as sess:
+# Start Training
+with tf.Session(config=config) as sess:
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())  # for pearson op
     sess.run(tf.tables_initializer())
@@ -139,21 +140,23 @@ with tf.Session() as sess:
 
         while True:
             try:
-                loss, _ = sess.run([model.loss, model.train_op], feed_dict={handle: train_handle})
+                loss, _ = sess.run([model.loss, model.train_op],
+                                   feed_dict={handle: train_handle, model.training: True})
                 print('Step %d: loss=%f' % (step, loss))
                 train_summary.value[0].simple_value = loss
                 writer.add_summary(train_summary, step)
                 step += 1
-            except tf.errors.OutOfRangeError:  # 到达epoch最后
+            except tf.errors.OutOfRangeError:  # 到达epoch最后，eval
                 sess.run(dev_iter.initializer)
                 sess.run(model.mse_reset)
                 sess.run(model.pearson_reset)
                 try:
                     while True:
-                        mse, pearson = sess.run([model.mse_update, model.pearson_update],
-                                                feed_dict={handle: dev_handle})
+                        sess.run([model.mse_update, model.pearson_update],
+                                 feed_dict={handle: dev_handle, model.training: False})
                 except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
-                    mse, pearson = sess.run([model.mse, model.pearson], feed_dict={handle: dev_handle})
+                    mse, pearson = sess.run([model.mse, model.pearson],
+                                            feed_dict={handle: dev_handle, model.training: False})
                     print('Epoch %d: mse=%f, pearson=%f' % (epoch, mse, pearson))
                     dev_summary.value[0].simple_value = mse
                     dev_summary.value[1].simple_value = pearson
@@ -165,7 +168,7 @@ with tf.Session() as sess:
                         no_improve_epochs = 0
                         best_pearson = pearson
                         # only save when improved
-                        saver.save(sess, 'model/qe/qe.ckpt', global_step=step)
+                        saver.save(sess, args.model_dir + 'qe.ckpt', global_step=step)
                     print('Patience: %d' % no_improve_epochs)
                     break
 

@@ -66,9 +66,11 @@ with tf.Session() as sess:
     sess.run(model.pearson_reset)
     try:
         while True:
-            mse, pearson, _ = sess.run([model.mse_update, model.pearson_update, model.pred_update])
+            sess.run([model.mse_update, model.pearson_update, model.pred_update],
+                     feed_dict={model.training: False})
     except tf.errors.OutOfRangeError:  # Thrown at the end of the epoch.
-        mse, pearson, pred = sess.run([model.mse, model.pearson, model.all_pred])
+        mse, pearson, pred = sess.run([model.mse, model.pearson, model.all_pred],
+                                      feed_dict={model.training: False})
         print('test: mse=%f, pearson=%f' % (mse, pearson))
         with open(args.output, 'w') as f:
             for p in pred:
