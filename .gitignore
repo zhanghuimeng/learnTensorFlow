@@ -3,10 +3,11 @@ venv**/*
 **/logs/*
 logs/
 **/saved_graph/*
-**models**/
+**model**/
 data/parallel/*
 kiwi_**/*
 *.gz
+*.hter
 
 # Compiled source #
 ###################
