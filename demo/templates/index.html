@@ -12,11 +12,17 @@
 {% endif %}
     <form method="post" action="/">
         {{ form.csrf_token }}
-        {{ form.src.label }} {{ form.src(size=20) }}
+        {{ form.src.label }} {{ form.src(size=150) }}
         <br />
-        {{ form.mt.label }} {{ form.mt(size=20) }}
+        {{ form.mt.label }} {{ form.mt(size=150) }}
         <br />
         <input type="submit" value="Submit" />
     </form>
+{% if birnn_qe_score %}
+    <p>BiRNN QE score = {{birnn_qe_score}}</p>
+{% endif %}
+{% if openkiwi_qe_score %}
+    <p>OpenKiwi QE score = {{openkiwi_qe_score}}</p>
+{% endif %}
 </body>
 </html>

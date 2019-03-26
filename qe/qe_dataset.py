@@ -9,10 +9,7 @@ def read_vocab(src, tgt):
     return vocab_idx_src, vocab_idx_tgt, vocab_str_src, vocab_str_tgt
 
 
-def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, batch_size, shuffle=False):
-    src = tf.data.TextLineDataset(src)
-    tgt = tf.data.TextLineDataset(tgt)
-    hter = tf.data.TextLineDataset(hter)
+def simple_dataset_creater(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, batch_size, shuffle=False):
     src = src.map(lambda string: tf.string_split([string]).values)
     tgt = tgt.map(lambda string: tf.string_split([string]).values)
     hter = hter.map(lambda x: tf.string_to_number(x))
@@ -47,3 +44,22 @@ def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, batch_size,
         dataset = dataset.shuffle(buffer_size=10000)
     dataset = dataset.padded_batch(batch_size, padded_shapes=padded_shapes, padding_values=padding_values)
     return dataset
+
+def one_dataset_loader(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, batch_size, shuffle=False):
+    src = tf.data.TextLineDataset(src)
+    tgt = tf.data.TextLineDataset(tgt)
+    hter = tf.data.TextLineDataset(hter)
+    return simple_dataset_creater(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, batch_size, shuffle)
+
+def load_dataset_from_lists(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, batch_size, shuffle=False):
+    print(str(src))
+    print(str(tgt))
+    print(str(hter))
+    with tf.Session() as sess:
+        src = tf.convert_to_tensor(src, dtype=tf.string)
+        tgt = tf.convert_to_tensor(tgt, dtype=tf.string)
+        hter = tf.convert_to_tensor(hter, dtype=tf.string)
+        src = tf.data.Dataset.from_tensor_slices(src)
+        tgt = tf.data.Dataset.from_tensor_slices(tgt)
+        hter = tf.data.Dataset.from_tensor_slices(hter)
+    return simple_dataset_creater(src, tgt, hter, vocab_idx_src, vocab_idx_tgt, batch_size, shuffle)
