@@ -4,6 +4,7 @@ from flask import redirect
 from flask_wtf import FlaskForm
 from wtforms import StringField
 from wtforms.validators import DataRequired
+from flask_bootstrap import Bootstrap
 
 import subprocess
 import shutil, os
@@ -12,6 +13,7 @@ from qe.qe_test import test as birnn_test
 
 
 app = Flask(__name__)
+Bootstrap(app)
 app.config['SECRET_KEY'] = 'any secret string'
 default_src = "If you are creating multiple files , you can enter common metadata for all of the files ."
 default_mt = "Wenn Sie mehrere Dateien erstellen , können Sie die allgemeinen Metadaten für alle Dateien eingeben ."
