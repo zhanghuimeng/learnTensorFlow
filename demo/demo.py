@@ -18,7 +18,7 @@ app.config['SECRET_KEY'] = 'any secret string'
 default_src = "If you are creating multiple files , you can enter common metadata for all of the files ."
 default_mt = "Wenn Sie mehrere Dateien erstellen , können Sie die allgemeinen Metadaten für alle Dateien eingeben ."
 
-birnn_model_dir = "model/qe/qe.ckpt-3220"
+birnn_model_dir = "model/qe3/qe.ckpt-13800"
 kiwi_model_dir = "model/en_de.smt_models/estimator/target_1"
 kiwi_out_dir = "tmp_out"
 kiwi_src_file = "temp_src.txt"
@@ -47,9 +47,9 @@ def submit():
         pred = birnn_test(vocab=vocab, test=test, model_addr=model)
         # kiwi
         # write to files
-        with open(kiwi_src_file, 'w') as f:
+        with open(kiwi_src_file, 'w', encoding='utf-8') as f:
             f.write(form.src.data)
-        with open(kiwi_mt_file, 'w') as f:
+        with open(kiwi_mt_file, 'w', encoding='utf-8') as f:
             f.write(form.mt.data)
         command = kiwi_command % (kiwi_model_dir, kiwi_out_dir, kiwi_src_file, kiwi_mt_file)
         print(command)
@@ -60,9 +60,9 @@ def submit():
         if process.returncode == 0:
             with open(kiwi_out_dir + "/sentence_scores", 'r') as f:
                 kiwi_score = float(f.read())
+            shutil.rmtree(kiwi_out_dir)
         os.remove(kiwi_src_file)
         os.remove(kiwi_mt_file)
-        shutil.rmtree(kiwi_out_dir)
         return render_template('index.html', form=form, birnn_qe_score=pred[0][0],
                                openkiwi_qe_score=kiwi_score)
     return render_template('index.html', form=form)

@@ -24,7 +24,7 @@ do
             $python_cmd qe/qe_test.py \
                 --vocab data/qe-2017/src.vocab data/qe-2017/tgt.vocab \
                  --test data/qe-2017/test.src data/qe-2017/test.mt data/qe-2017/test.hter \
-                --model model/qe/qe.ckpt-3220 \
+                --model model/qe3/qe.ckpt-13800 \
                 --output test.hter
             ;;
         s)

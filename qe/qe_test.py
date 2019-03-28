@@ -1,8 +1,8 @@
 import tensorflow as tf
 import argparse
 
-from .qe_dataset import read_vocab, one_dataset_loader, load_dataset_from_lists
-from .qe_model import Model
+from qe.qe_dataset import read_vocab, one_dataset_loader, load_dataset_from_lists
+from qe.qe_model import Model
 
 BATCH_SIZE = 50
 MAX_EPOCH = 500
