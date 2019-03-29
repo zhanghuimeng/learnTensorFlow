@@ -4,30 +4,79 @@
 {% block styles %}
 {{super()}}
 <link rel="stylesheet"
-      href="{{url_for('.static', filename='index.css')}}">
+      href="{{ url_for('.static', filename='index.css') }}">
+<script src="{{ url_for('.static', filename='index.js') }}"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
 {% endblock %}
 {% block content %}
     <div class="main-div">
         <h1>Quality Estimation Demo</h1>
-        <form method="post" action="/">
+        <form class="form form-horizontal" method="post" action="/">
             {{ form.csrf_token }}
-            {{ form.src.label }} {{ form.src(size=150) }}
-            <br />
-            {{ form.mt.label }} {{ form.mt(size=150) }}
-            <br />
+            <div class="form-group">
+                <label class="col-sm-2 control-label">{{ form.src.label }}</label>
+                <div class="col-sm-10">
+                  {{ form.src() }}
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-2 control-label">{{ form.mt.label }}</label>
+                <div class="col-sm-10">
+                  {{ form.mt() }}
+                </div>
+            </div>
+            <!--可以用来load的内容-->
+            <div class="form-group">
+                <label class="col-sm-2 control-label">pe</label>
+                <div class="col-sm-10">
+                    <input type="text" class="form-control" readonly="readonly">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="col-sm-2 control-label">HTER</label>
+                <div class="col-sm-10">
+                    <input type="text" class="form-control" readonly="readonly">
+                </div>
+            </div>
             <input type="submit" value="Submit" />
         </form>
-        <form class="form form-horizontal" method="post" role="form">
-          {{ form.csrf_token }}
-          {{ wtf.form_errors(form, hiddens="only") }}
-          {{ wtf.form_field(form.src) }}
-          {{ wtf.form_field(form.mt) }}
-        </form>
+
         {% if birnn_qe_score %}
         <p>BiRNN QE score = {{birnn_qe_score}}</p>
         {% endif %}
         {% if openkiwi_qe_score %}
         <p>OpenKiwi QE score = {{openkiwi_qe_score}}</p>
         {% endif %}
+
+        <!--测试数据-->
+        <!--{{ pagination.links }}-->
+        <table class="table" id="test-data-table">
+            <thead>
+                <tr>
+                    <th class="text-center">line number</th>
+                    <th class="text-center">Source sentence</th>
+                    <th class="text-center">Machine translation</th>
+                    <th class="text-center">Post edited translation</th>
+                    <th class="text-center">HTER</th>
+                    <th class="text-center">#</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for test in test_data %}
+                <tr>
+                    <td>{{ test.number }}</td>
+                    <td>{{ test.src }}</td>
+                    <td>{{ test.mt }}</td>
+                    <td>{{ test.pe }}</td>
+                    <td>{{ test.hter }}</td>
+                    <td>
+                        <input type="submit" name="load-test-data-{{ test.number }}"
+                               value="load" onclick="loadTestData({{ loop.index }})" />
+                    </td>
+                </tr>
+                {% endfor %}
+          </tbody>
+        </table>
+        {{ pagination.links }}
     </div>
 {% endblock %}

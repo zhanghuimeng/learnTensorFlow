@@ -12,3 +12,4 @@ flask
 flask-bootstrap
 flask-wtf
 WTForms
+flask-paginate
