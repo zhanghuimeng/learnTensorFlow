@@ -61,6 +61,7 @@ class QeForm(FlaskForm):
 def get_test_data(offset=0, per_page=10):
     return test_data[offset: offset + per_page]
 
+
 @app.route('/', methods=('GET', 'POST'))
 def submit():
     # pagination

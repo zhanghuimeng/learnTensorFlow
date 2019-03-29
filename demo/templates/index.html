@@ -5,37 +5,46 @@
 {{super()}}
 <link rel="stylesheet"
       href="{{ url_for('.static', filename='index.css') }}">
-<script src="{{ url_for('.static', filename='index.js') }}"></script>
 <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+<script src="{{ url_for('.static', filename='index.js') }}"></script>
 {% endblock %}
 {% block content %}
     <div class="main-div">
         <h1>Quality Estimation Demo</h1>
         <form class="form form-horizontal" method="post" action="/">
             {{ form.csrf_token }}
+            <!--能用但是不bootstrap-->
+            <!--<div class="form-group">-->
+                <!--<label class="col-sm-2 control-label">{{ form.src.label }}</label>-->
+                <!--<div class="col-sm-10">-->
+                    <!--{{ form.src() }}-->
+                <!--</div>-->
+            <!--</div>-->
             <div class="form-group">
                 <label class="col-sm-2 control-label">{{ form.src.label }}</label>
                 <div class="col-sm-10">
-                  {{ form.src() }}
+                    {{ form.src(class='form-control', id='src') }}
                 </div>
             </div>
             <div class="form-group">
                 <label class="col-sm-2 control-label">{{ form.mt.label }}</label>
                 <div class="col-sm-10">
-                  {{ form.mt() }}
+                    {{ form.mt(class='form-control', id='mt') }}
+                    <!--Bootstrap但是定制度不够-->
+                    <!--{{ wtf.form_field(form.mt) }}-->
                 </div>
             </div>
             <!--可以用来load的内容-->
             <div class="form-group">
-                <label class="col-sm-2 control-label">pe</label>
+                <label class="col-sm-2 control-label" for="pe">pe</label>
                 <div class="col-sm-10">
-                    <input type="text" class="form-control" readonly="readonly">
+                    <input type="text" class="form-control" readonly="readonly" id="pe">
                 </div>
             </div>
             <div class="form-group">
-                <label class="col-sm-2 control-label">HTER</label>
+                <label class="col-sm-2 control-label" for="hter">HTER</label>
                 <div class="col-sm-10">
-                    <input type="text" class="form-control" readonly="readonly">
+                    <input type="text" class="form-control" readonly="readonly" id="hter">
                 </div>
             </div>
             <input type="submit" value="Submit" />
@@ -70,8 +79,9 @@
                     <td>{{ test.pe }}</td>
                     <td>{{ test.hter }}</td>
                     <td>
+                        <!--注意index的减号-->
                         <input type="submit" name="load-test-data-{{ test.number }}"
-                               value="load" onclick="loadTestData({{ loop.index }})" />
+                               value="load" onclick="loadTestData({{ loop.index - 1}})" />
                     </td>
                 </tr>
                 {% endfor %}
