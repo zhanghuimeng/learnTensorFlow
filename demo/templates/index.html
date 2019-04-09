@@ -35,20 +35,35 @@
                 </div>
             </div>
             <!--可以用来load的内容-->
+            <!--<div class="form-group">-->
+                <!--<label class="col-sm-2 control-label" for="pe">pe</label>-->
+                <!--<div class="col-sm-10">-->
+                    <!--<input type="text" class="form-control" readonly="readonly" id="pe">-->
+                <!--</div>-->
+            <!--</div>-->
+            <!--<div class="form-group">-->
+                <!--<label class="col-sm-2 control-label" for="hter">HTER</label>-->
+                <!--<div class="col-sm-10">-->
+                    <!--<input type="text" class="form-control" readonly="readonly" id="hter">-->
+                <!--</div>-->
+            <!--</div>-->
+            <!--修改成了和flask有关的内容-->
             <div class="form-group">
-                <label class="col-sm-2 control-label" for="pe">pe</label>
+                <label class="col-sm-2 control-label">{{ form.pe.label }}</label>
                 <div class="col-sm-10">
-                    <input type="text" class="form-control" readonly="readonly" id="pe">
+                    {{ form.pe(class='form-control', id='pe', readonly="readonly") }}
                 </div>
             </div>
             <div class="form-group">
-                <label class="col-sm-2 control-label" for="hter">HTER</label>
+                <label class="col-sm-2 control-label">form.hter.label</label>
                 <div class="col-sm-10">
-                    <input type="text" class="form-control" readonly="readonly" id="hter">
+                    {{ form.hter(class='form-control', id='hter', readonly="readonly") }}
                 </div>
             </div>
             <input type="submit" value="Submit" />
         </form>
+
+        <hr />
 
         {% if birnn_qe_score %}
         <p>BiRNN QE score = {{birnn_qe_score}}</p>
@@ -56,6 +71,8 @@
         {% if openkiwi_qe_score %}
         <p>OpenKiwi QE score = {{openkiwi_qe_score}}</p>
         {% endif %}
+
+        <h2>Test Data</h2>
 
         <!--测试数据-->
         <!--{{ pagination.links }}-->

@@ -2,13 +2,13 @@ from flask import Flask
 from flask import render_template
 from flask import request
 from flask_wtf import FlaskForm
-from wtforms import StringField
+from wtforms import StringField, FloatField
 from wtforms.validators import DataRequired
 from flask_bootstrap import Bootstrap
 from flask_paginate import Pagination, get_page_args
 
 import subprocess
-import shutil, os
+import shutil, os, platform
 from collections import namedtuple
 
 from qe.qe_test import test as birnn_test
@@ -56,6 +56,8 @@ for i in range(0, len(test_src)):
 class QeForm(FlaskForm):
     src = StringField('src', validators=[DataRequired()], default=default_src)
     mt = StringField('mt', validators=[DataRequired()], default=default_mt)
+    pe = StringField('pe')
+    hter = FloatField('HTER')
 
 
 def get_test_data(offset=0, per_page=10):
@@ -72,13 +74,15 @@ def submit():
 
     form = QeForm()
     if form.validate_on_submit():
-        print(form.src.data)
-        print(form.mt.data)
+        print("Submitted src:", form.src.data)
+        print("Submitted mt:", form.mt.data)
         # birnn
         vocab = ["data/qe-2017/src.vocab", "data/qe-2017/tgt.vocab"]
         test = [[form.src.data], [form.mt.data], ["0.0"]]
         model = birnn_model_dir
         pred = birnn_test(vocab=vocab, test=test, model_addr=model)
+        pred = pred[0][0]
+        print("BiRNN score: %f" % pred)
         # kiwi
         # write to files
         with open(kiwi_src_file, 'w', encoding='utf-8') as f:
@@ -87,10 +91,10 @@ def submit():
             f.write(form.mt.data)
         command = kiwi_command % (kiwi_model_dir, kiwi_out_dir, kiwi_src_file, kiwi_mt_file)
         print(command)
+        kiwi_score = None
         process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
         process.wait()
         print(process.returncode)
-        kiwi_score = None
         if process.returncode == 0:
             with open(kiwi_out_dir + "/sentence_scores", 'r') as f:
                 kiwi_score = float(f.read())
@@ -98,7 +102,7 @@ def submit():
         os.remove(kiwi_src_file)
         os.remove(kiwi_mt_file)
         return render_template('index.html', form=form,
-                               birnn_qe_score=pred[0][0],
+                               birnn_qe_score=pred,
                                openkiwi_qe_score=kiwi_score,
                                test_data=pagination_test_data, per_page=per_page,
                                pagination=pagination)
