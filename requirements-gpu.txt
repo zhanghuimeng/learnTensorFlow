@@ -6,5 +6,5 @@ scikit-learn
 scipy
 sklearn
 tensorboard==1.10.0
-tensorflow-gpu==1.10.0
+tensorflow-gpu==2.3.1
 openkiwi
